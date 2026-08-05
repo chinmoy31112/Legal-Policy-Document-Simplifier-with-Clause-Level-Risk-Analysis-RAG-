@@ -23,19 +23,9 @@ class RetrievalService:
     def __init__(self):
         self.settings = get_settings()
         
-        # Configure ChromaDB client (Server mode)
-        # Using HTTPClient to connect to the Docker container in production
-        if self.settings.is_production:
-            try:
-                # Assuming ChromaDB is running at chroma:8000 in docker-compose
-                # We could pull these from config in the future
-                self.client = chromadb.HttpClient(host="chroma", port=8000)
-            except Exception as e:
-                logger.warning("chroma_http_client_failed", error=str(e), fallback="PersistentClient")
-                self.client = chromadb.PersistentClient(path=str(self.settings.chroma_path))
-        else:
-            # Embedded mode for local development
-            self.client = chromadb.PersistentClient(path=str(self.settings.chroma_path))
+        # Configure ChromaDB client (Embedded mode)
+        # The user explicitly requested embedded mode for ChromaDB deployment.
+        self.client = chromadb.PersistentClient(path=str(self.settings.chroma_path))
             
         self.collection_name = self.settings.chroma_collection_name
         self._collection = None
