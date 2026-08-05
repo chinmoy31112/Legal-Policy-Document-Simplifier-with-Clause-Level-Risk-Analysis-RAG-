@@ -1,0 +1,50 @@
+{
+  "document_type": "employment_contract",
+  "title": "Standard Employment Contract Clauses",
+  "jurisdiction": "general",
+  "version": "1.0",
+  "clauses": [
+    {
+      "clause_number": "1",
+      "title": "Employment Terms",
+      "content": "The Employee is hired for the position specified in the offer letter. Employment begins on the start date indicated and is subject to a probationary period. The Employee will report to the designated supervisor. The terms of employment, including job responsibilities, may be reasonably modified by mutual agreement.",
+      "category": "employment_terms"
+    },
+    {
+      "clause_number": "2",
+      "title": "Compensation and Benefits",
+      "content": "The Employee shall receive the base salary specified in the offer letter, payable in accordance with the company's standard payroll schedule. The Employee is eligible for benefits as described in the company's benefits package, including health insurance, retirement plans, and paid time off. Salary reviews will be conducted annually. Any bonuses or incentive compensation are discretionary and subject to company performance.",
+      "category": "compensation"
+    },
+    {
+      "clause_number": "3",
+      "title": "Working Hours and Overtime",
+      "content": "The standard working hours are as specified in the offer letter. Overtime work may be required from time to time and will be compensated in accordance with applicable labor laws. The Employee is entitled to rest periods and breaks as required by law. Flexible working arrangements may be available subject to management approval.",
+      "category": "working_hours"
+    },
+    {
+      "clause_number": "4",
+      "title": "Confidentiality",
+      "content": "The Employee agrees to maintain the confidentiality of all proprietary and confidential information disclosed during the course of employment. Confidential information includes business plans, customer lists, technical data, and trade secrets. This obligation continues after the termination of employment for a reasonable period. The Employee may disclose confidential information only as required by law or with written authorization.",
+      "category": "confidentiality"
+    },
+    {
+      "clause_number": "5",
+      "title": "Non-Compete and Non-Solicitation",
+      "content": "For a period of twelve months following termination, the Employee agrees not to directly compete with the company within a reasonable geographic area. The Employee also agrees not to solicit company employees or customers during this period. These restrictions are limited in scope and duration to protect legitimate business interests. The company will provide reasonable consideration for these restrictions.",
+      "category": "non_compete"
+    },
+    {
+      "clause_number": "6",
+      "title": "Termination",
+      "content": "Either party may terminate the employment relationship with reasonable written notice as specified in this agreement. The company may terminate employment for cause immediately upon written notice specifying the reasons. Upon termination, the Employee shall return all company property and materials. The Employee is entitled to receive all earned and unpaid compensation through the date of termination, along with any accrued benefits.",
+      "category": "termination"
+    },
+    {
+      "clause_number": "7",
+      "title": "Intellectual Property",
+      "content": "Any inventions, works, or intellectual property created by the Employee during the course of employment and related to the company's business shall be the property of the company. The Employee agrees to disclose and assign such intellectual property to the company. This does not apply to inventions developed entirely on the Employee's own time without use of company resources, unless related to the company's business.",
+      "category": "intellectual_property"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "document_type": "eula",
+  "title": "Standard End-User License Agreement Clauses",
+  "jurisdiction": "general",
+  "version": "1.0",
+  "clauses": [
+    {
+      "clause_number": "1",
+      "title": "License Grant",
+      "content": "Subject to the terms of this Agreement, the Licensor grants the Licensee a non-exclusive, non-transferable, limited license to use the software for personal or internal business purposes. The license is granted for the term specified and may be terminated as provided herein. The Licensee may install the software on the number of devices specified.",
+      "category": "license_grant"
+    },
+    {
+      "clause_number": "2",
+      "title": "Restrictions",
+      "content": "The Licensee shall not copy, modify, distribute, sell, or lease any part of the software. The Licensee shall not reverse engineer, decompile, or disassemble the software except to the extent permitted by applicable law. The Licensee shall not use the software to develop competing products. These restrictions protect the Licensor's intellectual property rights.",
+      "category": "restrictions"
+    },
+    {
+      "clause_number": "3",
+      "title": "Updates and Support",
+      "content": "The Licensor may provide updates, patches, and new versions of the software. Updates may be automatic or require user action. The Licensor will provide reasonable technical support during the license term. Support includes bug fixes and reasonable assistance with software functionality.",
+      "category": "support"
+    },
+    {
+      "clause_number": "4",
+      "title": "Data Collection and Privacy",
+      "content": "The software may collect usage data, error reports, and diagnostic information. Data collection practices are described in the Privacy Policy. The Licensee may opt out of non-essential data collection. The Licensor will handle collected data in accordance with applicable privacy laws and the Privacy Policy.",
+      "category": "privacy"
+    },
+    {
+      "clause_number": "5",
+      "title": "Warranty Disclaimer",
+      "content": "The software is provided 'as is' without warranty of any kind, express or implied, including but not limited to the implied warranties of merchantability, fitness for a particular purpose, and non-infringement. The Licensor does not warrant that the software will be uninterrupted or error-free. However, the Licensor will use reasonable efforts to fix reported defects in a timely manner.",
+      "category": "warranty"
+    },
+    {
+      "clause_number": "6",
+      "title": "Limitation of Liability",
+      "content": "To the maximum extent permitted by applicable law, the Licensor shall not be liable for any indirect, incidental, special, consequential, or punitive damages. The Licensor's total liability under this agreement shall not exceed the license fees paid by the Licensee. This limitation does not apply to damages arising from gross negligence or willful misconduct.",
+      "category": "liability"
+    }
+  ]
+}

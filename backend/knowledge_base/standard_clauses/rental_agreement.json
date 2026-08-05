@@ -1,0 +1,44 @@
+{
+  "document_type": "rental_agreement",
+  "title": "Standard Rental Agreement Clauses",
+  "jurisdiction": "general",
+  "version": "1.0",
+  "clauses": [
+    {
+      "clause_number": "1",
+      "title": "Lease Term",
+      "content": "This lease agreement is for a fixed term as specified, beginning on the start date and ending on the end date. Upon expiration, the lease may be renewed by mutual written agreement. Either party must provide reasonable written notice of intent not to renew. The lease may convert to a month-to-month tenancy upon expiration if neither party provides notice.",
+      "category": "lease_term"
+    },
+    {
+      "clause_number": "2",
+      "title": "Rent and Payment",
+      "content": "The Tenant agrees to pay the monthly rent amount specified on or before the due date each month. Rent may be paid by check, electronic transfer, or other methods agreed upon. A reasonable grace period shall be provided before late fees apply. Late fees shall not exceed the maximum amount permitted by applicable law. The Landlord shall provide written receipts for all rent payments upon request.",
+      "category": "rent_payment"
+    },
+    {
+      "clause_number": "3",
+      "title": "Security Deposit",
+      "content": "The Tenant shall pay a security deposit as specified in this agreement. The security deposit shall be held in accordance with applicable law and returned within the legally required timeframe after the lease ends, less any deductions for unpaid rent or damages beyond normal wear and tear. The Landlord shall provide an itemized list of any deductions from the security deposit.",
+      "category": "security_deposit"
+    },
+    {
+      "clause_number": "4",
+      "title": "Maintenance and Repairs",
+      "content": "The Landlord shall maintain the premises in a habitable condition and make necessary repairs in a timely manner. The Tenant shall keep the premises clean and notify the Landlord promptly of any needed repairs. The Tenant is responsible for damages caused by the Tenant's negligence or misuse. The Landlord shall provide reasonable notice before entering the premises for repairs, except in emergencies.",
+      "category": "maintenance"
+    },
+    {
+      "clause_number": "5",
+      "title": "Tenant Rights and Quiet Enjoyment",
+      "content": "The Tenant has the right to quiet enjoyment of the premises. The Landlord shall not interfere with the Tenant's reasonable use of the property. The Landlord must provide reasonable advance notice before entering the premises, except in emergencies. The Tenant has the right to privacy and to have guests within reasonable limits.",
+      "category": "tenant_rights"
+    },
+    {
+      "clause_number": "6",
+      "title": "Termination and Eviction",
+      "content": "Either party may terminate the lease with proper written notice as required by law. The Landlord may terminate for material breach after providing written notice and a reasonable opportunity to cure. Eviction proceedings shall follow all applicable legal requirements. The Tenant may terminate early under conditions permitted by law, such as domestic violence situations or uninhabitable conditions.",
+      "category": "termination"
+    }
+  ]
+}

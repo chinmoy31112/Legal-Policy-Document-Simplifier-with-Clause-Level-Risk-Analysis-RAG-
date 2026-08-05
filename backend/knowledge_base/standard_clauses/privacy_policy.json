@@ -1,0 +1,56 @@
+{
+  "document_type": "privacy_policy",
+  "title": "Standard Privacy Policy Clauses",
+  "jurisdiction": "general",
+  "version": "1.0",
+  "clauses": [
+    {
+      "clause_number": "1",
+      "title": "Information We Collect",
+      "content": "We collect personal information that you voluntarily provide to us when you register on the platform, express an interest in obtaining information about us or our products and services, when you participate in activities on the platform, or otherwise when you contact us. The personal information we collect may include names, email addresses, phone numbers, mailing addresses, and similar contact data.",
+      "category": "data_collection"
+    },
+    {
+      "clause_number": "2",
+      "title": "How We Use Your Information",
+      "content": "We use personal information collected via our platform for a variety of business purposes described below. We process your personal information for these purposes in reliance on our legitimate business interests, in order to enter into or perform a contract with you, with your consent, and/or for compliance with our legal obligations. We use the information we collect or receive to facilitate account creation and authentication, to send administrative information, to fulfill and manage orders, to post testimonials with your consent, to request feedback, to protect our services, to enforce our terms and policies, to respond to legal requests, and to manage user accounts.",
+      "category": "data_usage"
+    },
+    {
+      "clause_number": "3",
+      "title": "Data Sharing",
+      "content": "We only share information with your consent, to comply with laws, to provide you with services, to protect your rights, or to fulfill business obligations. We may process or share your data based on consent, legitimate interests, performance of a contract, legal obligations, or vital interests. We do not sell your personal information to third parties for their marketing purposes without your explicit consent.",
+      "category": "data_sharing"
+    },
+    {
+      "clause_number": "4",
+      "title": "Data Retention",
+      "content": "We will only keep your personal information for as long as it is necessary for the purposes set out in this privacy policy, unless a longer retention period is required or permitted by law. When we have no ongoing legitimate business need to process your personal information, we will either delete or anonymize such information. If deletion is not possible, we will securely store your information and isolate it from further processing until deletion is possible.",
+      "category": "data_retention"
+    },
+    {
+      "clause_number": "5",
+      "title": "Data Security",
+      "content": "We have implemented appropriate and reasonable technical and organizational security measures designed to protect the security of any personal information we process. However, despite our safeguards and efforts to secure your information, no electronic transmission over the Internet or information storage technology can be guaranteed to be 100% secure. We will make every reasonable effort to protect your personal data but cannot guarantee absolute security.",
+      "category": "data_security"
+    },
+    {
+      "clause_number": "6",
+      "title": "Your Privacy Rights",
+      "content": "In some regions, such as the European Economic Area (EEA), United Kingdom (UK), and Canada, you have rights that allow you greater access to and control over your personal information. You may review, change, or terminate your account at any time. You have the right to access your personal data, the right to rectify inaccurate data, the right to erasure, the right to restrict processing, the right to data portability, and the right to object to processing.",
+      "category": "user_rights"
+    },
+    {
+      "clause_number": "7",
+      "title": "Cookies and Tracking Technologies",
+      "content": "We may use cookies and similar tracking technologies to access or store information. You can set your browser to refuse all or some browser cookies, or to alert you when cookies are being sent. If you disable or refuse cookies, some parts of the platform may become inaccessible or not function properly. We provide clear information about what cookies we use and allow you to manage your cookie preferences.",
+      "category": "cookies"
+    },
+    {
+      "clause_number": "8",
+      "title": "Updates to This Policy",
+      "content": "We may update this privacy policy from time to time. The updated version will be indicated by an updated 'Revised' date. We will notify you of any material changes by posting the new privacy policy on this page and, where appropriate, sending you a notification. We encourage you to review this privacy policy frequently to be informed of how we are protecting your information.",
+      "category": "policy_updates"
+    }
+  ]
+}

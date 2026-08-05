@@ -1,0 +1,56 @@
+{
+  "document_type": "terms_of_service",
+  "title": "Standard Terms of Service Clauses",
+  "jurisdiction": "general",
+  "version": "1.0",
+  "clauses": [
+    {
+      "clause_number": "1",
+      "title": "Acceptance of Terms",
+      "content": "By accessing or using our services, you agree to be bound by these Terms of Service. If you do not agree to all the terms and conditions, you may not access or use the services. We reserve the right to modify these terms at any time with reasonable notice. Your continued use of the service after such modifications constitutes acceptance of the updated terms.",
+      "category": "acceptance"
+    },
+    {
+      "clause_number": "2",
+      "title": "User Accounts",
+      "content": "To use certain features of the service, you must register for an account. You agree to provide accurate, current, and complete information during registration. You are responsible for safeguarding your account credentials and for all activities that occur under your account. You must notify us immediately of any unauthorized use of your account. We will not be liable for losses arising from unauthorized use of your account if you fail to maintain the security of your credentials.",
+      "category": "user_accounts"
+    },
+    {
+      "clause_number": "3",
+      "title": "Acceptable Use",
+      "content": "You agree not to use the service for any unlawful purpose or in any way that could damage, disable, or impair the service. Prohibited activities include but are not limited to: violating applicable laws, infringing intellectual property rights, transmitting malware or harmful code, harassing or threatening other users, attempting to gain unauthorized access to systems, and engaging in any activity that disrupts the service for others.",
+      "category": "acceptable_use"
+    },
+    {
+      "clause_number": "4",
+      "title": "Intellectual Property",
+      "content": "The service and its original content, features, and functionality are owned by us and are protected by international copyright, trademark, patent, trade secret, and other intellectual property laws. You retain ownership of content you submit to the service. By submitting content, you grant us a non-exclusive, worldwide, royalty-free license to use, reproduce, and display your content solely for the purpose of operating and providing the service.",
+      "category": "intellectual_property"
+    },
+    {
+      "clause_number": "5",
+      "title": "Limitation of Liability",
+      "content": "To the maximum extent permitted by applicable law, we shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits or revenues, whether incurred directly or indirectly. Our total liability for any claims arising out of or relating to these terms or the service shall not exceed the amount you paid us in the twelve months preceding the claim. This limitation applies regardless of the theory of liability.",
+      "category": "liability"
+    },
+    {
+      "clause_number": "6",
+      "title": "Termination",
+      "content": "We may terminate or suspend your account and access to the service at our sole discretion, with reasonable notice, for conduct that we believe violates these Terms or is harmful to other users or us. Upon termination, your right to use the service will immediately cease. You may terminate your account at any time by contacting us. All provisions of these Terms which by their nature should survive termination shall survive, including ownership provisions, warranty disclaimers, and limitations of liability.",
+      "category": "termination"
+    },
+    {
+      "clause_number": "7",
+      "title": "Dispute Resolution",
+      "content": "Any disputes arising out of or relating to these Terms or the service shall first be attempted to be resolved through good-faith negotiation. If negotiation fails, the dispute shall be submitted to mediation before resorting to litigation. Any legal proceedings shall be conducted in the courts of competent jurisdiction. Both parties agree to participate in good faith in any dispute resolution process.",
+      "category": "dispute_resolution"
+    },
+    {
+      "clause_number": "8",
+      "title": "Indemnification",
+      "content": "You agree to indemnify and hold us harmless from any claims, damages, losses, liabilities, and expenses (including reasonable attorney fees) arising from your use of the service, your violation of these Terms, or your violation of any rights of another person or entity. This indemnification obligation will survive the termination of your account and these Terms.",
+      "category": "indemnification"
+    }
+  ]
+}

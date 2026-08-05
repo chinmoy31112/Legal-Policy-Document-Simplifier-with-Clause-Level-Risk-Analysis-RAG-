@@ -1,0 +1,44 @@
+{
+  "document_type": "loan_agreement",
+  "title": "Standard Loan Agreement Clauses",
+  "jurisdiction": "general",
+  "version": "1.0",
+  "clauses": [
+    {
+      "clause_number": "1",
+      "title": "Loan Amount and Disbursement",
+      "content": "The Lender agrees to lend the Borrower the principal amount specified in this agreement. The loan shall be disbursed in accordance with the disbursement schedule. The Borrower acknowledges receipt of the loan amount and agrees to repay it under the terms set forth herein.",
+      "category": "loan_terms"
+    },
+    {
+      "clause_number": "2",
+      "title": "Interest Rate",
+      "content": "The loan shall bear interest at the rate specified in this agreement. Interest shall be calculated on the outstanding principal balance. The interest rate is fixed for the term of the loan unless otherwise specified. Any changes to the interest rate require written notice and agreement of both parties. The annual percentage rate and total cost of the loan are clearly disclosed.",
+      "category": "interest"
+    },
+    {
+      "clause_number": "3",
+      "title": "Repayment Terms",
+      "content": "The Borrower shall repay the loan in equal installments as specified in the repayment schedule. Payments shall be applied first to accrued interest and then to principal. The Borrower may prepay the loan in whole or in part without penalty. In the event of prepayment, interest shall be calculated only on the outstanding balance.",
+      "category": "repayment"
+    },
+    {
+      "clause_number": "4",
+      "title": "Default and Remedies",
+      "content": "The loan shall be in default if the Borrower fails to make any payment when due and such failure continues for a reasonable grace period after written notice. Upon default, the Lender may declare the entire outstanding balance immediately due and payable. The Borrower shall be liable for reasonable costs of collection. The Lender shall provide written notice of default and a reasonable opportunity to cure before accelerating the loan.",
+      "category": "default"
+    },
+    {
+      "clause_number": "5",
+      "title": "Late Fees",
+      "content": "If any payment is not received within the grace period specified, a late fee shall be charged. Late fees shall not exceed the maximum amount permitted by applicable law. Late fees are intended to compensate the Lender for the administrative cost of processing late payments and do not constitute a penalty.",
+      "category": "late_fees"
+    },
+    {
+      "clause_number": "6",
+      "title": "Borrower Protections",
+      "content": "The Borrower has the right to receive a complete copy of this agreement. The Borrower has the right to prepay without penalty. The Lender shall provide regular statements showing the outstanding balance, payments made, and interest charged. The Borrower shall be informed of any changes to loan terms with reasonable advance notice.",
+      "category": "borrower_rights"
+    }
+  ]
+}
