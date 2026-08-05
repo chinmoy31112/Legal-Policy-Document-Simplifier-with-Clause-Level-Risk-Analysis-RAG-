@@ -20,6 +20,9 @@ from app.schemas.knowledge_base import KBIngestionResponse
 logger = get_logger(__name__)
 
 
+from app.ai.embedding import EmbeddingService
+from app.ai.retrieval import RetrievalService
+
 class KnowledgeBaseService:
     """Handles knowledge base document and clause management."""
 
@@ -28,6 +31,8 @@ class KnowledgeBaseService:
         self.kb_doc_repo = KBDocumentRepository(session)
         self.kb_clause_repo = KBClauseRepository(session)
         self.segmenter = DocumentSegmenter(min_clause_length=20)
+        self.embedding_service = EmbeddingService()
+        self.retrieval_service = RetrievalService()
 
     async def get_all_documents(self, offset: int = 0, limit: int = 20) -> tuple[list[KBDocument], int]:
         """List all KB documents."""
@@ -58,16 +63,15 @@ class KnowledgeBaseService:
         """
         Upload and ingest a document into the knowledge base.
 
-        Extracts text, segments into clauses, and stores them.
-        Embeddings will be generated in Phase 4.
+        Extracts text, segments into clauses, generates embeddings,
+        and stores them in PostgreSQL and ChromaDB.
         """
         if not file.filename:
             raise FileUploadError("No filename provided.")
 
-        # For KB ingestion, we can just save it to a temporary file
-        # or read it into memory. For large files, saving to disk is better.
         import tempfile
         import os
+        import uuid
 
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}") as temp_file:
@@ -85,6 +89,9 @@ class KnowledgeBaseService:
             # 2. Segment into clauses
             segments = self.segmenter.segment(extraction_result)
 
+            if not segments:
+                raise ValidationError("Failed to extract any usable clauses from the document.")
+
             # 3. Create KB Document
             kb_doc = await self.kb_doc_repo.create(
                 title=title,
@@ -95,31 +102,65 @@ class KnowledgeBaseService:
                 status="active"
             )
 
-            # 4. Create KB Clauses
+            # 4. Generate Embeddings
+            texts_to_embed = [segment.content for segment in segments]
+            embeddings = await self.embedding_service.generate_embeddings(texts_to_embed)
+            
+            if len(embeddings) != len(segments):
+                raise AIServiceError(f"Embedding count mismatch. Expected {len(segments)}, got {len(embeddings)}.")
+
+            # 5. Create DB Clauses and prepare for ChromaDB
             kb_clauses = []
-            for segment in segments:
+            chroma_ids = []
+            chroma_texts = []
+            chroma_metadatas = []
+
+            for i, segment in enumerate(segments):
+                # Generate a stable UUID for the clause
+                clause_id = uuid.uuid4()
+                chroma_id = str(clause_id)
+                
                 kb_clause = KBClause(
+                    id=clause_id,
                     kb_document_id=kb_doc.id,
                     clause_number=segment.clause_number,
                     title=segment.title,
                     content=segment.content,
                     category=segment.category,
+                    chromadb_id=chroma_id
                 )
                 kb_clauses.append(kb_clause)
+                
+                # Prepare ChromaDB inputs
+                chroma_ids.append(chroma_id)
+                chroma_texts.append(segment.content)
+                chroma_metadatas.append({
+                    "kb_document_id": str(kb_doc.id),
+                    "document_type": document_type,
+                    "title": segment.title or "",
+                    "category": segment.category or "",
+                    "jurisdiction": jurisdiction or ""
+                })
             
+            # Save to Postgres
             await self.kb_clause_repo.bulk_create(kb_clauses)
             await self.session.commit()
             
-            # TODO (Phase 4): Generate embeddings for these clauses
-            # For now, clauses_embedded is 0
+            # Save to ChromaDB
+            await self.retrieval_service.index_clauses(
+                ids=chroma_ids,
+                texts=chroma_texts,
+                embeddings=embeddings,
+                metadatas=chroma_metadatas
+            )
 
             return KBIngestionResponse(
                 document_id=kb_doc.id,
                 title=kb_doc.title,
                 clauses_extracted=len(kb_clauses),
-                clauses_embedded=0,
+                clauses_embedded=len(embeddings),
                 status="success",
-                message=f"Successfully ingested {len(kb_clauses)} clauses.",
+                message=f"Successfully ingested and embedded {len(kb_clauses)} clauses.",
             )
             
         finally:
@@ -130,7 +171,7 @@ class KnowledgeBaseService:
                     logger.warning(f"Failed to delete temporary file {temp_path}: {e}")
 
     async def delete_document(self, document_id: UUID) -> None:
-        """Delete a KB document and its clauses."""
+        """Delete a KB document and its clauses from both Postgres and ChromaDB."""
         # Ensure document exists
         await self.get_document(document_id)
         
@@ -138,4 +179,5 @@ class KnowledgeBaseService:
         await self.kb_doc_repo.delete(document_id)
         await self.session.commit()
         
-        # TODO (Phase 4): Delete embeddings from ChromaDB
+        # Delete embeddings from ChromaDB
+        await self.retrieval_service.delete_document(str(document_id))
