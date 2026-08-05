@@ -8,6 +8,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.auth import (
     UserRegister,
@@ -18,6 +19,8 @@ from app.schemas.auth import (
 )
 from app.schemas.common import APIResponse
 from app.api.v1.deps import get_current_user_id
+from app.dependencies import get_db_session
+from app.services.auth_service import AuthService
 
 router = APIRouter()
 
@@ -29,10 +32,21 @@ router = APIRouter()
     summary="Register a new user",
     description="Create a new user account with email, password, and full name.",
 )
-async def register(payload: UserRegister):
+async def register(
+    payload: UserRegister,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
     """Register a new user account."""
-    # Implementation in Phase 2
-    pass
+    service = AuthService(session)
+    user = await service.register(
+        email=payload.email,
+        password=payload.password,
+        full_name=payload.full_name,
+    )
+    return APIResponse(
+        data=UserResponse.model_validate(user),
+        message="Registration successful.",
+    )
 
 
 @router.post(
@@ -41,10 +55,14 @@ async def register(payload: UserRegister):
     summary="User login",
     description="Authenticate with email and password. Returns access and refresh tokens.",
 )
-async def login(payload: UserLogin):
+async def login(
+    payload: UserLogin,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
     """Authenticate user and return JWT tokens."""
-    # Implementation in Phase 2
-    pass
+    service = AuthService(session)
+    tokens = await service.login(email=payload.email, password=payload.password)
+    return APIResponse(data=tokens, message="Login successful.")
 
 
 @router.post(
@@ -53,10 +71,14 @@ async def login(payload: UserLogin):
     summary="Refresh access token",
     description="Exchange a valid refresh token for a new access token.",
 )
-async def refresh_token(payload: TokenRefresh):
+async def refresh_token(
+    payload: TokenRefresh,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
     """Refresh an expired access token."""
-    # Implementation in Phase 2
-    pass
+    service = AuthService(session)
+    tokens = await service.refresh(refresh_token_str=payload.refresh_token)
+    return APIResponse(data=tokens, message="Token refreshed.")
 
 
 @router.get(
@@ -67,7 +89,9 @@ async def refresh_token(payload: TokenRefresh):
 )
 async def get_profile(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
     """Get the current authenticated user's profile."""
-    # Implementation in Phase 2
-    pass
+    service = AuthService(session)
+    user = await service.get_profile(user_id)
+    return APIResponse(data=UserResponse.model_validate(user))

@@ -24,6 +24,7 @@ from app.core.exceptions import (
     ValidationError as AppValidationError,
 )
 from app.api.v1.router import api_v1_router
+import app.models  # noqa: F401 — Register all ORM models
 
 logger = get_logger(__name__)
 

@@ -8,6 +8,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.document import (
     DocumentDetail,
@@ -18,6 +19,8 @@ from app.schemas.document import (
 )
 from app.schemas.common import APIResponse, PaginatedResponse, PaginationParams
 from app.api.v1.deps import get_current_user_id, get_pagination
+from app.dependencies import get_db_session
+from app.services.document_service import DocumentService
 
 router = APIRouter()
 
@@ -34,6 +37,7 @@ router = APIRouter()
 )
 async def upload_document(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
     file: UploadFile = File(..., description="Legal document file (PDF, DOCX, TXT)"),
     document_type: DocumentType = Form(
         default=DocumentType.OTHER,
@@ -42,8 +46,17 @@ async def upload_document(
     jurisdiction: str | None = Form(default=None, description="Legal jurisdiction"),
 ):
     """Upload a legal document for analysis."""
-    # Implementation in Phase 2
-    pass
+    service = DocumentService(session)
+    document = await service.upload_document(
+        user_id=user_id,
+        file=file,
+        document_type=document_type,
+        jurisdiction=jurisdiction,
+    )
+    return APIResponse(
+        data=DocumentUploadResponse.model_validate(document),
+        message="Document uploaded successfully.",
+    )
 
 
 @router.get(
@@ -54,13 +67,27 @@ async def upload_document(
 )
 async def list_documents(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
     pagination: Annotated[PaginationParams, Depends(get_pagination)],
     status_filter: DocumentStatus | None = Query(default=None, alias="status"),
     document_type: DocumentType | None = Query(default=None),
 ):
     """List all documents for the authenticated user."""
-    # Implementation in Phase 2
-    pass
+    service = DocumentService(session)
+    items, total = await service.list_documents(
+        user_id=user_id,
+        offset=pagination.offset,
+        limit=pagination.page_size,
+        status_filter=status_filter,
+        document_type=document_type,
+    )
+    paginated = PaginatedResponse.create(
+        items=[DocumentListItem.model_validate(doc) for doc in items],
+        total=total,
+        page=pagination.page,
+        page_size=pagination.page_size,
+    )
+    return APIResponse(data=paginated)
 
 
 @router.get(
@@ -72,10 +99,12 @@ async def list_documents(
 async def get_document(
     document_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
     """Get detailed information about a specific document."""
-    # Implementation in Phase 2
-    pass
+    service = DocumentService(session)
+    document = await service.get_document(document_id, user_id)
+    return APIResponse(data=DocumentDetail.model_validate(document))
 
 
 @router.delete(
@@ -87,7 +116,8 @@ async def get_document(
 async def delete_document(
     document_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
     """Delete a document and its associated data."""
-    # Implementation in Phase 2
-    pass
+    service = DocumentService(session)
+    await service.delete_document(document_id, user_id)
