@@ -20,16 +20,19 @@ import { cn, formatFileSize } from "@/lib/utils";
 import { ACCEPTED_FILE_TYPES, MAX_FILE_SIZE } from "@/lib/constants";
 import type { DocumentType } from "@/types/document";
 import { DOCUMENT_TYPE_LABELS } from "@/types/document";
+import { useUploadDocument } from "@/hooks/use-documents";
+import { useRouter } from "next/navigation";
 
 const documentTypes: { value: DocumentType; label: string }[] = Object.entries(
   DOCUMENT_TYPE_LABELS
 ).map(([value, label]) => ({ value: value as DocumentType, label }));
 
 export default function UploadPage() {
+  const router = useRouter();
+  const uploadMutation = useUploadDocument();
   const [files, setFiles] = useState<File[]>([]);
   const [documentType, setDocumentType] = useState<DocumentType>("other");
   const [jurisdiction, setJurisdiction] = useState("");
-  const [isUploading, setIsUploading] = useState(false);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setFiles(acceptedFiles);
@@ -46,9 +49,14 @@ export default function UploadPage() {
 
   const handleUpload = async () => {
     if (files.length === 0) return;
-    setIsUploading(true);
-    // Upload implementation in Phase 2
-    setTimeout(() => setIsUploading(false), 2000);
+    uploadMutation.mutate(
+      { file: files[0], documentType, jurisdiction },
+      {
+        onSuccess: (data) => {
+          router.push(`/analysis/${data.id}`);
+        },
+      }
+    );
   };
 
   const removeFile = () => {
@@ -132,7 +140,8 @@ export default function UploadPage() {
                   </p>
                 </div>
                 <button
-                  onClick={removeFile}
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); removeFile(); }}
                   className="p-2 rounded-lg hover:bg-white/5 transition-colors"
                 >
                   <X className="w-4 h-4 text-[var(--text-muted)]" />
@@ -192,18 +201,30 @@ export default function UploadPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.5 }}
         >
+          {uploadMutation.isError && (
+            <div className="mb-4 p-4 bg-red-500/10 text-red-500 text-sm rounded-xl flex items-start border border-red-500/20">
+              <AlertCircle className="w-5 h-5 mr-2 shrink-0 mt-0.5" />
+              <span>
+                {uploadMutation.error instanceof Error
+                  ? uploadMutation.error.message
+                  : "An error occurred during upload. Please try again."}
+              </span>
+            </div>
+          )}
+
           <button
-            onClick={handleUpload}
-            disabled={files.length === 0 || isUploading}
+            type="button"
+            onClick={(e) => { e.preventDefault(); handleUpload(); }}
+            disabled={files.length === 0 || uploadMutation.isPending}
             className={cn(
               "w-full py-3.5 rounded-xl text-base font-semibold",
               "transition-all duration-200",
-              files.length > 0 && !isUploading
+              files.length > 0 && !uploadMutation.isPending
                 ? "gradient-brand text-white hover:opacity-90 glow cursor-pointer"
                 : "bg-[var(--bg-elevated)] text-[var(--text-muted)] cursor-not-allowed"
             )}
           >
-            {isUploading ? (
+            {uploadMutation.isPending ? (
               <span className="flex items-center justify-center gap-2">
                 <Loader2 className="w-5 h-5 animate-spin" />
                 Uploading & Processing...

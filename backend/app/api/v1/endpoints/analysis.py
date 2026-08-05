@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.deps import get_current_user_id
 from app.dependencies import get_db_session
 from app.schemas.common import APIResponse
-from app.schemas.analysis import DocumentAnalysisResponse, AnalysisResultResponse
+from app.schemas.analysis import DocumentAnalysisResponse, ClauseAnalysisResponse
 from app.services.analysis_service import AnalysisService
 
 router = APIRouter()
@@ -39,7 +39,7 @@ async def get_document_summary(
 
 @router.get(
     "/{document_id}/clauses",
-    response_model=APIResponse[list[AnalysisResultResponse]],
+    response_model=APIResponse[list[ClauseAnalysisResponse]],
     summary="Get clause analyses",
     description="Retrieve the risk analysis results for all clauses in a document.",
 )
@@ -52,4 +52,4 @@ async def get_clause_analyses(
     service = AnalysisService(session)
     # TODO: Add ownership check
     analyses = await service.get_clause_analyses(document_id)
-    return APIResponse(data=[AnalysisResultResponse.model_validate(a) for a in analyses])
+    return APIResponse(data=[ClauseAnalysisResponse.model_validate(a) for a in analyses])

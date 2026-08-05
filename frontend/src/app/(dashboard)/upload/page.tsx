@@ -5,12 +5,12 @@ import { useDropzone } from 'react-dropzone';
 import { useRouter } from 'next/navigation';
 import { UploadCloud, File as FileIcon, X, Loader2, AlertCircle } from 'lucide-react';
 import { useUploadDocument } from '@/hooks/use-documents';
-import { DocumentType } from '@/types/document';
+import type { DocumentType } from '@/types/document';
 
 export default function UploadPage() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
-  const [docType, setDocType] = useState<string>(DocumentType.OTHER);
+  const [docType, setDocType] = useState<string>('other');
   const [jurisdiction, setJurisdiction] = useState<string>('US');
   
   const uploadMutation = useUploadDocument();
@@ -68,13 +68,13 @@ export default function UploadPage() {
                 value={docType}
                 onChange={(e) => setDocType(e.target.value)}
               >
-                <option value={DocumentType.TERMS_OF_SERVICE}>Terms of Service</option>
-                <option value={DocumentType.PRIVACY_POLICY}>Privacy Policy</option>
-                <option value={DocumentType.EMPLOYMENT_CONTRACT}>Employment Contract</option>
-                <option value={DocumentType.RENTAL_AGREEMENT}>Rental Agreement</option>
-                <option value={DocumentType.LOAN_AGREEMENT}>Loan Agreement</option>
-                <option value={DocumentType.EULA}>EULA</option>
-                <option value={DocumentType.OTHER}>Other / General Contract</option>
+                <option value="terms_and_conditions">Terms of Service</option>
+                <option value="privacy_policy">Privacy Policy</option>
+                <option value="employment_contract">Employment Contract</option>
+                <option value="rental_agreement">Rental Agreement</option>
+                <option value="loan_agreement">Loan Agreement</option>
+                <option value="eula">EULA</option>
+                <option value="other">Other / General Contract</option>
               </select>
             </div>
             
@@ -134,7 +134,8 @@ export default function UploadPage() {
                   </div>
                 </div>
                 <button 
-                  onClick={() => setFile(null)}
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); setFile(null); }}
                   className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
                   disabled={uploadMutation.isPending}
                 >
@@ -158,7 +159,8 @@ export default function UploadPage() {
         
         <div className="p-6 border-t bg-muted/20 flex justify-end">
           <button
-            onClick={handleUpload}
+            type="button"
+            onClick={(e) => { e.preventDefault(); handleUpload(); }}
             disabled={!file || uploadMutation.isPending}
             className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-8"
           >

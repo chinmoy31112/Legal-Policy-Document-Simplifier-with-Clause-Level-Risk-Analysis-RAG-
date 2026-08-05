@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import { Document, DocumentType, DocumentStatus } from '@/types/document';
+import type { Document, DocumentType, DocumentStatus } from '@/types/document';
 import { PaginatedResponse, APIResponse } from '@/types/api';
 
 export function useDocuments(page = 1, pageSize = 10) {
@@ -28,10 +28,10 @@ export function useDocument(id: string) {
       const doc = query.state.data;
       if (
         doc &&
-        (doc.status === DocumentStatus.UPLOADED ||
-          doc.status === DocumentStatus.EXTRACTING ||
-          doc.status === DocumentStatus.SEGMENTING ||
-          doc.status === DocumentStatus.ANALYZING)
+        (doc.status === 'uploaded' ||
+          doc.status === 'extracting' ||
+          doc.status === 'segmenting' ||
+          doc.status === 'analyzing')
       ) {
         return 3000; // poll every 3 seconds
       }

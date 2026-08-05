@@ -29,3 +29,5 @@ export const NAV_ITEMS = [
   { label: "History", href: "/dashboard/history", icon: "History" },
   { label: "Settings", href: "/dashboard/settings", icon: "Settings" },
 ] as const;
+
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";

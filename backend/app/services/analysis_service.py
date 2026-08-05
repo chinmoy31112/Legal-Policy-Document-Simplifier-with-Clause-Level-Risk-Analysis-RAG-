@@ -6,6 +6,7 @@ and provides methods to retrieve the results.
 """
 
 import asyncio
+from typing import Sequence
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession

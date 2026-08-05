@@ -15,7 +15,7 @@ from app.schemas.document import (
     DocumentListItem,
     DocumentStatus,
     DocumentType,
-    DocumentResponse,
+    DocumentUploadResponse,
 )
 from app.schemas.common import APIResponse, PaginatedResponse, PaginationParams
 from app.api.v1.deps import get_current_user_id, get_pagination
@@ -36,7 +36,7 @@ async def run_analysis_background(document_id: UUID):
 
 @router.post(
     "/upload",
-    response_model=APIResponse[DocumentResponse],
+    response_model=APIResponse[DocumentUploadResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Upload a legal document",
     description="Upload a document for parsing and risk analysis.",
@@ -62,7 +62,7 @@ async def upload_document(
     background_tasks.add_task(run_analysis_background, document.id)
     
     return APIResponse(
-        data=DocumentResponse.model_validate(document),
+        data=DocumentUploadResponse.model_validate(document),
         message="Document uploaded successfully. Analysis started."
     )
 
