@@ -1,1 +1,3 @@
-"""CLI commands package."""
+"""
+CLI tools package.
+"""
