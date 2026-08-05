@@ -58,12 +58,12 @@ class TimestampMixin:
     """Mixin that adds created_at and updated_at columns."""
 
     created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         server_default=func.now(),
     )
     updated_at: Mapped[datetime | None] = mapped_column(
         default=None,
-        onupdate=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 
