@@ -1,10 +1,4 @@
-"use client";
-
-/**
- * Dashboard layout with sidebar + content area.
- */
-
-import { Sidebar } from "@/components/layout/sidebar";
+import { Sidebar } from '@/components/layout/sidebar';
 
 export default function DashboardLayout({
   children,
@@ -12,11 +6,14 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
-      <main className="flex-1 ml-[260px] transition-all duration-300">
-        {children}
-      </main>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* We can add a Header here if needed, for now just the main content area */}
+        <main className="flex-1 overflow-y-auto p-8">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
