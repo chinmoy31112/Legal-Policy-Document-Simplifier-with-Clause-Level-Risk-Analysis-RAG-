@@ -226,16 +226,16 @@ def extract_pdf(file_path: str | Path) -> ExtractionResult:
         "page_count": doc.page_count,
     }
 
-    doc.close()
-
     logger.info(
         "pdf_extracted",
         path=str(file_path),
-        pages=doc.page_count if hasattr(doc, 'page_count') else metadata["page_count"],
+        pages=metadata["page_count"],
         blocks=len(blocks),
         chars=len(raw_text),
         is_scanned=is_scanned,
     )
+
+    doc.close()
 
     return ExtractionResult(
         raw_text=raw_text,

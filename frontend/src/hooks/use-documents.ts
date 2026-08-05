@@ -60,11 +60,7 @@ export function useUploadDocument() {
         formData.append('jurisdiction', jurisdiction);
       }
 
-      const response = await apiClient.post<APIResponse<Document>>('/documents/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      const response = await apiClient.post<APIResponse<Document>>('/documents/upload', formData);
       return response.data.data;
     },
     onSuccess: () => {

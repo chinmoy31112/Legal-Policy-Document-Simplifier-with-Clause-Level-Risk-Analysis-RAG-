@@ -15,9 +15,11 @@ from app.core.exceptions import NotFoundError, ValidationError
 from app.core.logging import get_logger
 from app.ai.pipeline import AnalysisPipeline
 from app.models.analysis import AnalysisResult, DocumentAnalysis
+from app.models.clause import Clause
 from app.repositories.analysis_repo import AnalysisResultRepository, DocumentAnalysisRepository
 from app.repositories.clause_repo import ClauseRepository
 from app.repositories.document_repo import DocumentRepository
+from app.document_processing import extract_document, DocumentSegmenter
 
 logger = get_logger(__name__)
 
@@ -46,15 +48,49 @@ class AnalysisService:
                 logger.error("analysis_doc_not_found", document_id=str(document_id))
                 return
                 
-            await self.document_repo.update_status(document_id, "analyzing")
+            await self.document_repo.update_status(document_id, "extracting")
             await self.session.commit()
             
-            clauses = await self.clause_repo.get_by_document(document_id)
-            if not clauses:
+            # Run heavy extraction and segmentation in a thread pool to avoid blocking the event loop
+            segmenter = DocumentSegmenter(min_clause_length=50)
+            
+            def process_document():
+                ext_res = extract_document(document.file_path)
+                segs = segmenter.segment(ext_res)
+                return ext_res, segs
+                
+            extraction_result, segments = await asyncio.to_thread(process_document)
+            
+            # Update document with extraction results
+            document.raw_text = extraction_result.raw_text
+            document.is_scanned = extraction_result.is_scanned
+            document.metadata_ = extraction_result.metadata
+            await self.session.commit()
+            
+            # Create clauses
+            if not segments:
                 logger.warning("analysis_no_clauses", document_id=str(document_id))
                 await self.document_repo.update_status(document_id, "completed")
                 await self.session.commit()
                 return
+                
+            clauses = [
+                Clause(
+                    document_id=document.id,
+                    clause_index=segment.index,
+                    clause_number=segment.clause_number,
+                    title=segment.title,
+                    content=segment.content,
+                    category=segment.category,
+                    start_page=segment.start_page,
+                    end_page=segment.end_page,
+                )
+                for segment in segments
+            ]
+            await self.clause_repo.bulk_create(clauses)
+            
+            await self.document_repo.update_status(document_id, "analyzing")
+            await self.session.commit()
 
             # Analyze each clause
             analysis_results = []

@@ -25,4 +25,4 @@ class ClauseResponse(BaseModel):
     end_page: int | None = None
     start_char: int | None = None
     end_char: int | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict, validation_alias="metadata_")

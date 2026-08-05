@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useDocument } from '@/hooks/use-documents';
 import { useDocumentSummary, useClauseAnalyses } from '@/hooks/use-analysis';
 import { StatusBadge } from '@/components/documents/status-badge';
-import { DocumentStatus } from '@/types/document';
+
 import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 import { AnalysisSummary } from '@/components/analysis/analysis-summary';
 import { ClauseCard } from '@/components/analysis/clause-card';
@@ -40,11 +40,11 @@ export default function AnalysisPage({ params }: { params: Promise<{ id: string 
   }
 
   const isProcessing = [
-    DocumentStatus.UPLOADED, 
-    DocumentStatus.EXTRACTING, 
-    DocumentStatus.SEGMENTING, 
-    DocumentStatus.ANALYZING
-  ].includes(document.status as DocumentStatus);
+    'uploaded', 
+    'extracting', 
+    'segmenting', 
+    'analyzing'
+  ].includes(document.status);
 
   const handleClauseSelect = (clauseId: string) => {
     setActiveClauseId(clauseId === activeClauseId ? null : clauseId);
@@ -84,7 +84,7 @@ export default function AnalysisPage({ params }: { params: Promise<{ id: string 
             We are currently extracting text, segmenting clauses, and running our AI risk models against standard reference contracts. This may take a minute.
           </p>
         </div>
-      ) : document.status === DocumentStatus.FAILED ? (
+      ) : document.status === 'failed' ? (
         <div className="flex-1 flex items-center justify-center border border-destructive/20 rounded-xl bg-destructive/5 p-12 text-center">
           <div className="max-w-md">
             <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />

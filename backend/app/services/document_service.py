@@ -130,12 +130,6 @@ class DocumentService:
             logger.error("file_write_error", error=str(e), path=str(file_path))
             raise FileUploadError(f"Failed to save file: {e}")
 
-        # Extract text and structure
-        extraction_result = extract_document(file_path)
-        
-        # Segment into clauses
-        segments = self.segmenter.segment(extraction_result)
-
         # Create database record
         document = await self.document_repo.create(
             user_id=user_id,
@@ -147,40 +141,20 @@ class DocumentService:
             document_type=document_type,
             jurisdiction=jurisdiction,
             status="uploaded",
-            raw_text=extraction_result.raw_text,
-            is_scanned=extraction_result.is_scanned,
-            metadata=extraction_result.metadata,
+            raw_text=None,
+            is_scanned=False,
+            metadata={},
         )
         
-        # Create clauses
-        if segments:
-            clauses = [
-                Clause(
-                    document_id=document.id,
-                    clause_index=segment.index,
-                    clause_number=segment.clause_number,
-                    title=segment.title,
-                    content=segment.content,
-                    category=segment.category,
-                    start_page=segment.start_page,
-                    end_page=segment.end_page,
-                )
-                for segment in segments
-            ]
-            await self.clause_repo.bulk_create(clauses)
-            
-            # Update status to segmented
-            await self.document_repo.update_status(document.id, "segmenting")
-            
         await self.session.commit()
 
         logger.info(
-            "document_uploaded_and_segmented",
+            "document_uploaded",
             document_id=str(document.id),
             user_id=str(user_id),
             filename=file.filename,
-            clauses=len(segments)
         )
+
         return document
 
     async def list_documents(

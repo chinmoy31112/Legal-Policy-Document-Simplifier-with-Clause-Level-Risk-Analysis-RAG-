@@ -78,6 +78,6 @@ class DocumentDetail(BaseModel):
     jurisdiction: str | None = None
     is_scanned: bool = False
     raw_text: str | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict, validation_alias="metadata_")
     created_at: datetime
     updated_at: datetime | None = None
