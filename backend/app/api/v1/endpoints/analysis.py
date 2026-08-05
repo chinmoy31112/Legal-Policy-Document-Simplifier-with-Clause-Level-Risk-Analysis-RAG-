@@ -1,117 +1,55 @@
 """
-Analysis endpoints.
+Analysis API endpoints.
 
-Handles triggering analysis, retrieving results, and streaming progress.
+Retrieve clause-level risk analyses and overall document summaries.
 """
 
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.analysis import (
-    AnalysisStatusResponse,
-    ClauseAnalysisResponse,
-    DocumentAnalysisResponse,
-)
-from app.schemas.common import APIResponse
 from app.api.v1.deps import get_current_user_id
+from app.dependencies import get_db_session
+from app.schemas.common import APIResponse
+from app.schemas.analysis import DocumentAnalysisResponse, AnalysisResultResponse
+from app.services.analysis_service import AnalysisService
 
 router = APIRouter()
 
 
-@router.post(
-    "/documents/{document_id}/analyze",
-    response_model=APIResponse[AnalysisStatusResponse],
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Start document analysis",
-    description=(
-        "Trigger the full RAG analysis pipeline for a document. "
-        "The analysis runs asynchronously. Use the status endpoint or SSE stream "
-        "to monitor progress."
-    ),
-)
-async def start_analysis(
-    document_id: UUID,
-    user_id: Annotated[UUID, Depends(get_current_user_id)],
-):
-    """Start the RAG analysis pipeline for a document."""
-    # Implementation in Phase 5
-    pass
-
-
 @router.get(
-    "/documents/{document_id}/status",
-    response_model=APIResponse[AnalysisStatusResponse],
-    summary="Get analysis status",
-    description="Check the current progress of document analysis.",
-)
-async def get_analysis_status(
-    document_id: UUID,
-    user_id: Annotated[UUID, Depends(get_current_user_id)],
-):
-    """Get the current analysis status for a document."""
-    # Implementation in Phase 5
-    pass
-
-
-@router.get(
-    "/documents/{document_id}/stream",
-    summary="Stream analysis progress",
-    description="Server-Sent Events stream for real-time analysis progress updates.",
-)
-async def stream_analysis_progress(
-    document_id: UUID,
-    user_id: Annotated[UUID, Depends(get_current_user_id)],
-):
-    """Stream analysis progress via Server-Sent Events."""
-    # Implementation in Phase 5
-    pass
-
-
-@router.get(
-    "/documents/{document_id}/results",
+    "/{document_id}/summary",
     response_model=APIResponse[DocumentAnalysisResponse],
-    summary="Get document-level analysis",
-    description="Retrieve the aggregate analysis results for an entire document.",
+    summary="Get document analysis summary",
+    description="Retrieve the overall risk analysis and summary for a document.",
 )
-async def get_document_analysis(
+async def get_document_summary(
     document_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
-    """Get document-level aggregate analysis results."""
-    # Implementation in Phase 5
-    pass
+    """Get the overall document analysis summary."""
+    service = AnalysisService(session)
+    # TODO: Add ownership check to ensure user_id owns document_id
+    analysis = await service.get_document_analysis(document_id)
+    return APIResponse(data=DocumentAnalysisResponse.model_validate(analysis))
 
 
 @router.get(
-    "/documents/{document_id}/clauses",
-    response_model=APIResponse[list[ClauseAnalysisResponse]],
-    summary="Get clause-level analysis",
-    description="Retrieve analysis results for all clauses in a document.",
+    "/{document_id}/clauses",
+    response_model=APIResponse[list[AnalysisResultResponse]],
+    summary="Get clause analyses",
+    description="Retrieve the risk analysis results for all clauses in a document.",
 )
 async def get_clause_analyses(
     document_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
-    risk_category: str | None = Query(default=None, description="Filter by risk category"),
-    min_risk_score: int | None = Query(default=None, ge=0, le=100),
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
-    """Get clause-level analysis results with optional filtering."""
-    # Implementation in Phase 5
-    pass
-
-
-@router.get(
-    "/clauses/{clause_id}",
-    response_model=APIResponse[ClauseAnalysisResponse],
-    summary="Get single clause analysis",
-    description="Retrieve the detailed analysis for a specific clause.",
-)
-async def get_clause_analysis(
-    clause_id: UUID,
-    user_id: Annotated[UUID, Depends(get_current_user_id)],
-):
-    """Get analysis results for a single clause."""
-    # Implementation in Phase 5
-    pass
+    """Get all clause analyses for a document."""
+    service = AnalysisService(session)
+    # TODO: Add ownership check
+    analyses = await service.get_clause_analyses(document_id)
+    return APIResponse(data=[AnalysisResultResponse.model_validate(a) for a in analyses])

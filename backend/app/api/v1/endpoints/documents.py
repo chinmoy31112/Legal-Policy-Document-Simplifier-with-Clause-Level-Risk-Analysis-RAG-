@@ -7,7 +7,7 @@ Handles document upload, listing, detail retrieval, and deletion.
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.document import (
@@ -15,37 +15,41 @@ from app.schemas.document import (
     DocumentListItem,
     DocumentStatus,
     DocumentType,
-    DocumentUploadResponse,
+    DocumentResponse,
 )
 from app.schemas.common import APIResponse, PaginatedResponse, PaginationParams
 from app.api.v1.deps import get_current_user_id, get_pagination
+from app.core.database import async_session_factory
 from app.dependencies import get_db_session
 from app.services.document_service import DocumentService
+from app.services.analysis_service import AnalysisService
 
 router = APIRouter()
 
 
+async def run_analysis_background(document_id: UUID):
+    """Helper to run the analysis task with a fresh database session."""
+    async with async_session_factory() as session:
+        service = AnalysisService(session)
+        await service._run_analysis_task(document_id)
+
+
 @router.post(
     "/upload",
-    response_model=APIResponse[DocumentUploadResponse],
+    response_model=APIResponse[DocumentResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Upload a legal document",
-    description=(
-        "Upload a PDF, DOCX, or TXT file for analysis. "
-        "The document will be queued for text extraction and clause segmentation."
-    ),
+    description="Upload a document for parsing and risk analysis.",
 )
 async def upload_document(
+    background_tasks: BackgroundTasks,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
-    file: UploadFile = File(..., description="Legal document file (PDF, DOCX, TXT)"),
-    document_type: DocumentType = Form(
-        default=DocumentType.OTHER,
-        description="Type of legal document",
-    ),
-    jurisdiction: str | None = Form(default=None, description="Legal jurisdiction"),
+    file: UploadFile = File(...),
+    document_type: str = Form(default="other"),
+    jurisdiction: str | None = Form(default=None),
 ):
-    """Upload a legal document for analysis."""
+    """Upload and start analysis on a document."""
     service = DocumentService(session)
     document = await service.upload_document(
         user_id=user_id,
@@ -53,9 +57,13 @@ async def upload_document(
         document_type=document_type,
         jurisdiction=jurisdiction,
     )
+    
+    # Trigger background analysis
+    background_tasks.add_task(run_analysis_background, document.id)
+    
     return APIResponse(
-        data=DocumentUploadResponse.model_validate(document),
-        message="Document uploaded successfully.",
+        data=DocumentResponse.model_validate(document),
+        message="Document uploaded successfully. Analysis started."
     )
 
 
