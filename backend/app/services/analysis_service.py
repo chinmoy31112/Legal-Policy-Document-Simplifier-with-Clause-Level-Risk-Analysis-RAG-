@@ -20,6 +20,7 @@ from app.repositories.analysis_repo import AnalysisResultRepository, DocumentAna
 from app.repositories.clause_repo import ClauseRepository
 from app.repositories.document_repo import DocumentRepository
 from app.document_processing import extract_document, DocumentSegmenter
+from app.config import get_settings
 
 logger = get_logger(__name__)
 
@@ -70,7 +71,7 @@ class AnalysisService:
             # Create clauses
             if not segments:
                 logger.warning("analysis_no_clauses", document_id=str(document_id))
-                await self.document_repo.update_status(document_id, "completed")
+                await self.document_repo.update_status(document_id, "failed")
                 await self.session.commit()
                 return
                 
@@ -96,26 +97,24 @@ class AnalysisService:
             analysis_results = []
             clause_analyses_dicts = []
             
-            # Process clauses concurrently to speed up analysis
-            semaphore = asyncio.Semaphore(3)
+            # Process clauses sequentially with a rate limit delay
+            # We save them one by one to allow real-time streaming to the frontend.
+            settings = get_settings()
+            analysis_results = []
+            clause_analyses_dicts = []
             
-            async def process_clause(clause):
-                async with semaphore:
-                    try:
-                        result_dict = await self.pipeline.analyze_clause(
-                            clause_text=clause.content,
-                            document_type=document.document_type,
-                            jurisdiction=document.jurisdiction
-                        )
-                        return clause, result_dict, None
-                    except Exception as e:
-                        return clause, None, e
-                        
-            tasks = [process_clause(clause) for clause in clauses]
-            results = await asyncio.gather(*tasks)
-            
-            for clause, result_dict, err in results:
-                if err is None:
+            for clause in clauses:
+                try:
+                    # Rate limit delay to avoid hitting LLM API limits
+                    if settings.rate_limit_delay > 0:
+                        await asyncio.sleep(settings.rate_limit_delay)
+
+                    result_dict = await self.pipeline.analyze_clause(
+                        clause_text=clause.content,
+                        document_type=document.document_type,
+                        jurisdiction=document.jurisdiction
+                    )
+                    
                     clause_analyses_dicts.append(result_dict)
                     
                     analysis_result = AnalysisResult(
@@ -132,8 +131,8 @@ class AnalysisService:
                         raw_llm_response=result_dict["raw_llm_response"],
                         retrieved_clauses=result_dict["retrieved_clauses"]
                     )
-                    analysis_results.append(analysis_result)
-                else:
+                    
+                except Exception as err:
                     logger.error("clause_analysis_failed", clause_id=str(clause.id), error=str(err))
                     # Still create a fallback result so the process doesn't completely fail
                     analysis_result = AnalysisResult(
@@ -144,10 +143,13 @@ class AnalysisService:
                         risk_category="standard",
                         confidence_score=0.0
                     )
-                    analysis_results.append(analysis_result)
-            
-            # Save clause results
-            await self.analysis_repo.bulk_create(analysis_results)
+                
+                analysis_results.append(analysis_result)
+                
+                # Save immediately to database to stream to UI
+                self.session.add(analysis_result)
+                await self.session.commit()
+
             
             # Generate overall document summary
             doc_summary_dict = await self.pipeline.generate_document_summary(

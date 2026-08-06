@@ -3,7 +3,7 @@ import { apiClient } from '@/lib/api-client';
 import { DocumentAnalysis, ClauseAnalysis } from '@/types/analysis';
 import { APIResponse } from '@/types/api';
 
-export function useDocumentSummary(documentId: string, enabled: boolean = true) {
+export function useDocumentSummary(documentId: string, enabled: boolean = true, isAnalyzing: boolean = false) {
   return useQuery({
     queryKey: ['analysis', documentId, 'summary'],
     queryFn: async () => {
@@ -11,10 +11,10 @@ export function useDocumentSummary(documentId: string, enabled: boolean = true) 
       return response.data.data;
     },
     enabled: !!documentId && enabled,
-    retry: 2,
-    // Refetch every 5s while the summary isn't loaded yet (analysis still running)
+    retry: false, // Don't retry on error, just wait for next poll
+    // Refetch every 5s while the summary isn't loaded yet, or while analyzing
     refetchInterval: (query) => {
-      if (!query.state.data && !query.state.error) {
+      if (isAnalyzing || (!query.state.data && !query.state.error)) {
         return 5000;
       }
       return false;
@@ -22,7 +22,7 @@ export function useDocumentSummary(documentId: string, enabled: boolean = true) 
   });
 }
 
-export function useClauseAnalyses(documentId: string, enabled: boolean = true) {
+export function useClauseAnalyses(documentId: string, enabled: boolean = true, isAnalyzing: boolean = false) {
   return useQuery({
     queryKey: ['analysis', documentId, 'clauses'],
     queryFn: async () => {
@@ -30,10 +30,10 @@ export function useClauseAnalyses(documentId: string, enabled: boolean = true) {
       return response.data.data;
     },
     enabled: !!documentId && enabled,
-    retry: 2,
-    // Refetch every 5s while clauses aren't loaded yet
+    retry: false,
+    // Refetch every 5s while clauses aren't loaded yet, or while analyzing (to stream in new clauses)
     refetchInterval: (query) => {
-      if (!query.state.data && !query.state.error) {
+      if (isAnalyzing || (!query.state.data && !query.state.error)) {
         return 5000;
       }
       return false;

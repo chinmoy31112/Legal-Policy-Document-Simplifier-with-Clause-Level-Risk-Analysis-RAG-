@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     gemini_llm_model: str = "gemini-2.5-flash"
     gemini_temperature: float = 0.1
     gemini_max_output_tokens: int = 8192
+    rate_limit_delay: float = 4.0
 
     # ── ChromaDB ─────────────────────────────────────────────────────────
     chroma_persist_dir: str = "./chroma_data"

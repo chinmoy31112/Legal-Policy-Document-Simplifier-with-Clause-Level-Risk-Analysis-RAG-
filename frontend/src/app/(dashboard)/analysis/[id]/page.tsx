@@ -17,10 +17,11 @@ export default function AnalysisPage({ params }: { params: Promise<{ id: string 
 
   const { data: document, isLoading: docLoading, isError: docError } = useDocument(id);
   
-  // Only fetch analysis results once the document is done processing
-  const isReady = !!document && document.status === 'completed';
-  const { data: summary, isLoading: summaryLoading } = useDocumentSummary(id, isReady);
-  const { data: clauses, isLoading: clausesLoading } = useClauseAnalyses(id, isReady);
+  // Fetch analysis results during analyzing to stream them, or when completed
+  const isReady = !!document && (document.status === 'completed' || document.status === 'analyzing');
+  const isAnalyzing = !!document && document.status === 'analyzing';
+  const { data: summary, isLoading: summaryLoading } = useDocumentSummary(id, isReady, isAnalyzing);
+  const { data: clauses, isLoading: clausesLoading } = useClauseAnalyses(id, isReady, isAnalyzing);
 
   if (docLoading) {
     return (
@@ -46,7 +47,6 @@ export default function AnalysisPage({ params }: { params: Promise<{ id: string 
     'uploaded', 
     'extracting', 
     'segmenting', 
-    'analyzing'
   ].includes(document.status);
 
   const handleClauseSelect = (clauseId: string) => {
@@ -114,13 +114,13 @@ export default function AnalysisPage({ params }: { params: Promise<{ id: string 
 
               <div className="mt-8">
                 <h3 className="font-semibold text-lg mb-4 border-b pb-2">Clause-by-Clause Breakdown</h3>
-                {clausesLoading ? (
+                {clausesLoading && (!clauses || clauses.length === 0) ? (
                   <div className="space-y-4 animate-pulse">
                     {[1, 2, 3].map(i => (
                       <div key={i} className="h-24 bg-muted rounded-xl w-full"></div>
                     ))}
                   </div>
-                ) : clauses ? (
+                ) : clauses && clauses.length > 0 ? (
                   <div className="space-y-4">
                     {clauses.map((clauseAnalysis) => (
                       <div key={clauseAnalysis.id} id={`card-${clauseAnalysis.id}`}>
@@ -131,6 +131,17 @@ export default function AnalysisPage({ params }: { params: Promise<{ id: string 
                         />
                       </div>
                     ))}
+                    {isAnalyzing && (
+                      <div className="flex items-center justify-center p-6 text-muted-foreground animate-pulse border-t mt-4">
+                        <Loader2 className="w-5 h-5 animate-spin mr-3 text-primary" />
+                        <span>Analyzing remaining clauses in background...</span>
+                      </div>
+                    )}
+                  </div>
+                ) : isAnalyzing ? (
+                  <div className="text-center p-12 text-muted-foreground animate-pulse border rounded-xl bg-muted/20">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+                    <p>Starting clause analysis... results will appear here shortly.</p>
                   </div>
                 ) : (
                   <p className="text-muted-foreground">No clauses found.</p>

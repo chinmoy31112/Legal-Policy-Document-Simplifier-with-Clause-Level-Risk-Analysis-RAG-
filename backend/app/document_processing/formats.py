@@ -221,8 +221,8 @@ def extract_document(file_path: str | Path) -> ExtractionResult:
     if ext == ".pdf":
         result = extract_pdf(file_path)
 
-        # If the PDF is scanned and has very little text, try OCR
-        if result.is_scanned and len(result.raw_text.strip()) < 100:
+        # If the PDF has very little text (whether scanned or vector outlines), try OCR
+        if len(result.raw_text.strip()) < 100:
             if is_ocr_available():
                 logger.info("ocr_fallback_triggered", path=str(file_path))
                 ocr_result = ocr_pdf(file_path)
@@ -235,8 +235,8 @@ def extract_document(file_path: str | Path) -> ExtractionResult:
                     )
             else:
                 result.errors.append(
-                    "Scanned PDF detected but OCR is not available. "
-                    "Install Tesseract OCR for scanned document support."
+                    "Unreadable PDF detected (likely scanned or vector paths) but OCR is not available. "
+                    "Install Tesseract OCR to process this document."
                 )
 
         return result
