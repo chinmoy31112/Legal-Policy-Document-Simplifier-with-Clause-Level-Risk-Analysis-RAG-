@@ -6,11 +6,10 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex flex-1 h-[calc(100vh-29px)] overflow-hidden bg-[#070a11]">
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* We can add a Header here if needed, for now just the main content area */}
-        <main className="flex-1 overflow-y-auto p-8">
+        <main className="flex-1 overflow-y-auto p-6 lg:p-8 space-y-6">
           {children}
         </main>
       </div>

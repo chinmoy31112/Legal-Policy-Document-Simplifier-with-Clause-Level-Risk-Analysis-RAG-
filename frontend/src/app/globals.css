@@ -1,201 +1,161 @@
 @import "tailwindcss";
 
-/* ── Custom Properties (Design Tokens) ─────────────────────────────── */
+/* ── Custom Properties & Design Tokens (Executive Dark Slate & Emerald AI) ── */
 :root {
-  /* Brand Palette */
-  --brand-50: #eff6ff;
-  --brand-100: #dbeafe;
-  --brand-200: #bfdbfe;
-  --brand-400: #60a5fa;
-  --brand-500: #3b82f6;
-  --brand-600: #2563eb;
-  --brand-700: #1d4ed8;
+  --font-manrope: 'Manrope', system-ui, sans-serif;
+  --font-plus-jakarta: 'Plus Jakarta Sans', system-ui, sans-serif;
 
-  /* Neutral Palette */
-  --gray-50: #f9fafb;
-  --gray-100: #f3f4f6;
-  --gray-200: #e5e7eb;
-  --gray-300: #d1d5db;
-  --gray-400: #9ca3af;
-  --gray-500: #6b7280;
-  --gray-600: #4b5563;
-  --gray-700: #374151;
-  --gray-800: #1f2937;
-  --gray-900: #111827;
-  --gray-950: #030712;
+  /* Executive Dark Palette */
+  --bg-dark: #070a11;
+  --bg-card: #0f172a;
+  --bg-card-hover: #1e293b;
+  --bg-surface: #111827;
+  --bg-muted: #1e293b;
+  
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-bright: rgba(255, 255, 255, 0.15);
 
-  /* Risk Colors */
-  --risk-standard: #22c55e;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  /* Brand & Risk Accents */
+  --brand-emerald: #10b981;
+  --brand-teal: #14b8a6;
+  --brand-indigo: #6366f1;
+
+  --risk-standard: #10b981;
   --risk-unusual: #eab308;
-  --risk-one-sided: #f97316;
+  --risk-onesided: #f97316;
   --risk-high: #ef4444;
-  --risk-unenforceable: #dc2626;
-
-  /* Surface Colors (Dark Theme) */
-  --bg-primary: #0a0a0f;
-  --bg-secondary: #111118;
-  --bg-surface: #16161d;
-  --bg-elevated: #1e1e27;
-  --bg-hover: #252530;
-
-  --text-primary: #f1f1f4;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
-
-  --border-primary: #27272a;
-  --border-subtle: #1e1e23;
-
-  /* Sidebar */
-  --sidebar-width: 260px;
-
-  /* Animation */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-default: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+  --risk-unenforceable: #a855f7;
 }
 
-/* ── Global Resets ─────────────────────────────────────────────────── */
+/* ── Global Resets ── */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-html {
+html, body {
+  background-color: var(--bg-dark);
+  color: var(--text-primary);
+  font-family: var(--font-plus-jakarta), system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-body {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
   min-height: 100vh;
   overflow-x: hidden;
 }
 
-/* ── Scrollbar Styling ─────────────────────────────────────────────── */
+h1, h2, h3, h4, .font-heading {
+  font-family: var(--font-manrope), system-ui, sans-serif;
+  letter-spacing: -0.025em;
+}
+
+/* Reset default list markers globally to prevent layout leaks */
+ul, ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* ── Scrollbars ── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
-
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(15, 23, 42, 0.5);
 }
-
 ::-webkit-scrollbar-thumb {
-  background: var(--gray-700);
-  border-radius: 3px;
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 9999px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--gray-600);
+  background: rgba(16, 185, 129, 0.6);
 }
 
-/* ── Glass Morphism Utilities ──────────────────────────────────────── */
-.glass {
-  background: rgba(22, 22, 29, 0.7);
+/* ── Glassmorphism & Visual Effects ── */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.glass-strong {
-  background: rgba(22, 22, 29, 0.85);
-  backdrop-filter: blur(30px);
-  -webkit-backdrop-filter: blur(30px);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* ── Gradient Utilities ────────────────────────────────────────────── */
-.gradient-brand {
-  background: linear-gradient(135deg, var(--brand-500), var(--brand-700));
+.glass-card {
+  background: rgba(17, 24, 39, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.gradient-text {
-  background: linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6);
+.glass-card:hover {
+  border-color: rgba(16, 185, 129, 0.3);
+  box-shadow: 0 20px 40px -15px rgba(16, 185, 129, 0.15);
+  transform: translateY(-2px);
+}
+
+/* ── Glowing Accents & Gradients ── */
+.gradient-emerald {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.gradient-indigo {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+}
+
+.gradient-glow-emerald {
+  box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.4);
+}
+
+.gradient-text-emerald {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-.gradient-border {
+.gradient-text-indigo {
+  background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Top Government Header Banner ── */
+.gov-header-banner {
+  background: linear-gradient(90deg, #090d16 0%, #111827 50%, #090d16 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: #94a3b8;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  padding: 0.4rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ── Pulse Indicator Animation ── */
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 0.4; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.pulse-dot {
   position: relative;
 }
 
-.gradient-border::before {
-  content: "";
+.pulse-dot::before {
+  content: '';
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(
-    135deg,
-    rgba(96, 165, 250, 0.3),
-    rgba(167, 139, 250, 0.3),
-    rgba(244, 114, 182, 0.1)
-  );
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  -webkit-mask-composite: xor;
-  pointer-events: none;
-}
-
-/* ── Glow Effects ──────────────────────────────────────────────────── */
-.glow {
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15),
-    0 0 40px rgba(59, 130, 246, 0.05);
-}
-
-.glow-risk-green {
-  box-shadow: 0 0 15px rgba(34, 197, 94, 0.15);
-}
-
-.glow-risk-yellow {
-  box-shadow: 0 0 15px rgba(234, 179, 8, 0.15);
-}
-
-.glow-risk-orange {
-  box-shadow: 0 0 15px rgba(249, 115, 22, 0.15);
-}
-
-.glow-risk-red {
-  box-shadow: 0 0 15px rgba(239, 68, 68, 0.15);
-}
-
-/* ── Pulse Animation for Status ────────────────────────────────────── */
-@keyframes pulse-dot {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
-}
-
-.status-pulse {
-  animation: pulse-dot 2s ease-in-out infinite;
-}
-
-/* ── Shimmer Loading Effect ────────────────────────────────────────── */
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-.skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--bg-surface) 25%,
-    var(--bg-elevated) 50%,
-    var(--bg-surface) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
-  border-radius: 6px;
+  inset: -3px;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  opacity: 0.4;
 }
