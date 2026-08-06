@@ -26,6 +26,7 @@ class AnalysisResultRepository(BaseRepository[AnalysisResult]):
         
         query = (
             select(AnalysisResult)
+            .options(selectinload(AnalysisResult.clause))
             .join(Clause, AnalysisResult.clause_id == Clause.id)
             .where(Clause.document_id == document_id)
             .order_by(Clause.clause_index.asc())

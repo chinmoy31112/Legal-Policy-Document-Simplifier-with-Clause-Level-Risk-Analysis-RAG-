@@ -16,8 +16,11 @@ export default function AnalysisPage({ params }: { params: Promise<{ id: string 
   const [activeClauseId, setActiveClauseId] = useState<string | null>(null);
 
   const { data: document, isLoading: docLoading, isError: docError } = useDocument(id);
-  const { data: summary, isLoading: summaryLoading } = useDocumentSummary(id);
-  const { data: clauses, isLoading: clausesLoading } = useClauseAnalyses(id);
+  
+  // Only fetch analysis results once the document is done processing
+  const isReady = !!document && document.status === 'completed';
+  const { data: summary, isLoading: summaryLoading } = useDocumentSummary(id, isReady);
+  const { data: clauses, isLoading: clausesLoading } = useClauseAnalyses(id, isReady);
 
   if (docLoading) {
     return (
@@ -49,9 +52,9 @@ export default function AnalysisPage({ params }: { params: Promise<{ id: string 
   const handleClauseSelect = (clauseId: string) => {
     setActiveClauseId(clauseId === activeClauseId ? null : clauseId);
     
-    // Scroll the document viewer to the clause
+    // Scroll the clause card into view
     if (clauseId !== activeClauseId) {
-      const element = document.getElementById(`clause-${clauseId}`);
+      const element = window.document.getElementById(`card-${clauseId}`);
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }

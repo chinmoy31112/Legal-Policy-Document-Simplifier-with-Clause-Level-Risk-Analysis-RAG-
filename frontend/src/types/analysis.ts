@@ -32,6 +32,13 @@ export interface ClauseAnalysis {
   suggested_rewrite: string | null;
   confidence_score: number;
   potential_legal_concern: string | null;
+  clause?: {
+    id: string;
+    clause_index: number;
+    clause_number?: string | null;
+    title?: string | null;
+    content: string;
+  } | null;
 }
 
 export interface RiskDistribution {

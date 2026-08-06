@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { useDocuments, useDeleteDocument } from '@/hooks/use-documents';
 import { StatusBadge } from '@/components/documents/status-badge';
-import { format } from 'date-fns';
+
 import { FileText, MoreVertical, Trash2, ArrowRight, Upload } from 'lucide-react';
-import { DocumentStatus } from '@/types/document';
+
 
 export default function DocumentsPage() {
   const { data, isLoading, isError } = useDocuments(1, 20);
@@ -89,7 +89,7 @@ export default function DocumentsPage() {
                     <StatusBadge status={doc.status} />
                   </td>
                   <td className="px-6 py-4 text-muted-foreground">
-                    {format(new Date(doc.created_at), 'MMM d, yyyy')}
+                    {new Date(doc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end space-x-2">
@@ -110,7 +110,7 @@ export default function DocumentsPage() {
                         href={`/analysis/${doc.id}`}
                         className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring bg-secondary text-secondary-foreground hover:bg-secondary/80 h-8 px-3"
                       >
-                        {doc.status === DocumentStatus.COMPLETED ? 'View Analysis' : 'View Status'}
+                        {doc.status === 'completed' ? 'View Analysis' : 'View Status'}
                         <ArrowRight className="w-4 h-4 ml-2" />
                       </Link>
                     </div>

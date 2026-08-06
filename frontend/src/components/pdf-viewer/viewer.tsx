@@ -21,7 +21,7 @@ export function DocumentViewer({
   const [search, setSearch] = useState('');
 
   // If we don't have raw text, we construct it from clauses
-  const documentText = document.raw_text || clauses.map(c => c.clause.content).join('\n\n');
+  const documentText = document.raw_text || clauses.map(c => c.clause?.content || c.plain_english_summary).join('\n\n');
 
   // Simple highlight logic: we wrap the clause text in a span with the risk color
   const renderHighlightedText = () => {
@@ -60,11 +60,11 @@ export function DocumentViewer({
               className={highlightClass}
               onClick={() => onClauseSelect(analysis.id)}
             >
-              {clause.title && (
+              {clause?.title && (
                 <h4 className="font-bold text-sm mb-2">{clause.title}</h4>
               )}
               <p className="font-serif leading-relaxed whitespace-pre-wrap text-[15px]">
-                {clause.content}
+                {clause?.content || analysis.plain_english_summary}
               </p>
             </div>
           );

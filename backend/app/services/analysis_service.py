@@ -96,20 +96,31 @@ class AnalysisService:
             analysis_results = []
             clause_analyses_dicts = []
             
-            # We process clauses sequentially to avoid rate limits, but in a production
-            # setup with high limits, we could use asyncio.gather for concurrent processing.
-            for clause in clauses:
-                try:
-                    result_dict = await self.pipeline.analyze_clause(
-                        clause_text=clause.content,
-                        document_type=document.document_type,
-                        jurisdiction=document.jurisdiction
-                    )
-                    
+            # Process clauses concurrently to speed up analysis
+            semaphore = asyncio.Semaphore(3)
+            
+            async def process_clause(clause):
+                async with semaphore:
+                    try:
+                        result_dict = await self.pipeline.analyze_clause(
+                            clause_text=clause.content,
+                            document_type=document.document_type,
+                            jurisdiction=document.jurisdiction
+                        )
+                        return clause, result_dict, None
+                    except Exception as e:
+                        return clause, None, e
+                        
+            tasks = [process_clause(clause) for clause in clauses]
+            results = await asyncio.gather(*tasks)
+            
+            for clause, result_dict, err in results:
+                if err is None:
                     clause_analyses_dicts.append(result_dict)
                     
                     analysis_result = AnalysisResult(
                         clause_id=clause.id,
+                        document_id=document.id,
                         plain_english_summary=result_dict["plain_english_summary"],
                         risk_score=result_dict["risk_score"],
                         risk_category=result_dict["risk_category"],
@@ -122,12 +133,12 @@ class AnalysisService:
                         retrieved_clauses=result_dict["retrieved_clauses"]
                     )
                     analysis_results.append(analysis_result)
-                    
-                except Exception as e:
-                    logger.error("clause_analysis_failed", clause_id=str(clause.id), error=str(e))
+                else:
+                    logger.error("clause_analysis_failed", clause_id=str(clause.id), error=str(err))
                     # Still create a fallback result so the process doesn't completely fail
                     analysis_result = AnalysisResult(
                         clause_id=clause.id,
+                        document_id=document.id,
                         plain_english_summary="Analysis failed for this clause.",
                         risk_score=0,
                         risk_category="standard",
@@ -164,6 +175,7 @@ class AnalysisService:
         except Exception as e:
             logger.error("analysis_task_fatal_error", document_id=str(document_id), error=str(e))
             try:
+                await self.session.rollback()
                 await self.document_repo.update_status(document_id, "failed")
                 await self.session.commit()
             except Exception as rollback_err:

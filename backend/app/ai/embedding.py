@@ -2,7 +2,7 @@
 Embedding service using Google GenAI SDK.
 
 Wrapper around gemini-embedding-2 for generating vector embeddings
-from legal clause text. Supports batching and error handling.
+from legal clause text. Uses the async client for non-blocking IO.
 """
 
 from typing import Sequence
@@ -36,7 +36,7 @@ class EmbeddingService:
         self, texts: Sequence[str], task_type: str = "RETRIEVAL_DOCUMENT"
     ) -> list[list[float]]:
         """
-        Generate embeddings for a list of texts.
+        Generate embeddings for a list of texts using the async client.
         
         Args:
             texts: List of strings to embed.
@@ -53,8 +53,6 @@ class EmbeddingService:
         if not texts:
             return []
             
-        # The new SDK supports asyncio operations but we might need to use sync in a thread pool
-        # or the new async client if available. The genai.Client() has async methods.
         try:
             embeddings_list = []
             
@@ -64,28 +62,26 @@ class EmbeddingService:
             for i, batch in enumerate(batches):
                 logger.debug("generating_embeddings_batch", batch=i+1, total=len(batches), size=len(batch))
                 
-                # We use the sync method here; for truly async we would use `client.aio.models.embed_content`
-                # if available, or run this in a threadpool. For now we use the sync client.
-                response = self.client.models.embed_content(
+                # Use the async client for non-blocking IO
+                response = await self.client.aio.models.embed_content(
                     model=self.model,
                     contents=list(batch),
                     config=types.EmbedContentConfig(
                         task_type=task_type,
-                        # Can specify output dimensionality if needed
                     )
                 )
                 
-                # The response object depends on the SDK version, typically it has an `embeddings` list
                 if hasattr(response, 'embeddings'):
                     for emb in response.embeddings:
                         embeddings_list.append(emb.values)
                 else:
-                    # Fallback for unexpected response structure
                     raise AIServiceError(f"Unexpected response from embedding model: {type(response)}")
 
             logger.info("embeddings_generated", count=len(embeddings_list), model=self.model)
             return embeddings_list
 
+        except AIServiceError:
+            raise
         except Exception as e:
             logger.error("embedding_generation_failed", error=str(e))
             raise AIServiceError(f"Failed to generate embeddings: {e}")

@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Upload Document', href: '/dashboard/upload', icon: Upload },
-  { name: 'My Documents', href: '/dashboard/documents', icon: FileText },
+  { name: 'My Documents', href: '/documents', icon: FileText },
   { name: 'Knowledge Base', href: '/dashboard/knowledge-base', icon: BookOpen },
   { name: 'History', href: '/dashboard/history', icon: History },
 ];

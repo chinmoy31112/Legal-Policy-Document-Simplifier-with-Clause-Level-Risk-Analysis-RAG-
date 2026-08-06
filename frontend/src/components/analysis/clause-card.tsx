@@ -37,7 +37,7 @@ export function ClauseCard({ clause, isSelected, onClick }: { clause: ClauseAnal
         <div className="flex items-start justify-between">
           <div className="flex items-center space-x-2">
             <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-1 rounded-md">
-              Clause {clause.clause.clause_number || clause.clause.clause_index + 1}
+              Clause {clause.clause?.clause_number || (clause.clause?.clause_index !== undefined ? clause.clause.clause_index + 1 : "Details")}
             </span>
             <RiskBadge category={clause.risk_category} score={clause.risk_score} />
           </div>
@@ -47,7 +47,7 @@ export function ClauseCard({ clause, isSelected, onClick }: { clause: ClauseAnal
         </div>
         
         <div>
-          <h3 className="text-sm font-semibold mb-1 line-clamp-1">{clause.clause.title || "Untitled Clause"}</h3>
+          <h3 className="text-sm font-semibold mb-1 line-clamp-1">{clause.clause?.title || "Legal Provision"}</h3>
           <p className="text-sm text-foreground/90 font-medium">
             {clause.plain_english_summary}
           </p>
@@ -59,14 +59,16 @@ export function ClauseCard({ clause, isSelected, onClick }: { clause: ClauseAnal
         <div className="px-4 pb-4 pt-2 border-t bg-muted/20 space-y-5 animate-in slide-in-from-top-2">
           
           {/* Original Text */}
-          <div className="space-y-1.5">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center">
-              <FileText className="w-3 h-3 mr-1" /> Original Text
-            </h4>
-            <div className="p-3 bg-background border rounded-lg text-sm text-muted-foreground font-serif leading-relaxed">
-              {clause.clause.content}
+          {clause.clause?.content && (
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center">
+                <FileText className="w-3 h-3 mr-1" /> Original Text
+              </h4>
+              <div className="p-3 bg-background border rounded-lg text-sm text-muted-foreground font-serif leading-relaxed">
+                {clause.clause.content}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Risk Reasons */}
           {clause.risk_reasons && clause.risk_reasons.length > 0 && (

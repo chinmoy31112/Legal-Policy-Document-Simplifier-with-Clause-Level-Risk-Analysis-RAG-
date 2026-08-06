@@ -31,6 +31,9 @@ class RetrievedClause(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+from app.schemas.clause import ClauseResponse
+
+
 class ClauseAnalysisResponse(BaseModel):
     """Full analysis result for a single clause."""
     model_config = ConfigDict(from_attributes=True)
@@ -42,11 +45,12 @@ class ClauseAnalysisResponse(BaseModel):
     risk_score: int = Field(..., ge=0, le=100)
     risk_category: RiskCategory
     risk_reasons: list[str] = Field(default_factory=list)
-    retrieved_clauses: list[RetrievedClause] = Field(default_factory=list)
+    retrieved_clauses: list[dict[str, Any]] = Field(default_factory=list)
     missing_protections: list[str] = Field(default_factory=list)
     suggested_rewrite: str | None = None
     confidence_score: float = Field(..., ge=0.0, le=1.0)
     potential_legal_concern: str | None = None
+    clause: ClauseResponse | None = None
 
 
 class RiskDistribution(BaseModel):
@@ -68,7 +72,7 @@ class DocumentAnalysisResponse(BaseModel):
     overall_summary: str
     top_risky_clauses: list[dict[str, Any]] = Field(default_factory=list)
     clause_statistics: dict[str, Any] = Field(default_factory=dict)
-    risk_distribution: RiskDistribution
+    risk_distribution: dict[str, Any] = Field(default_factory=dict)
     recommendations: list[str] = Field(default_factory=list)
 
 
