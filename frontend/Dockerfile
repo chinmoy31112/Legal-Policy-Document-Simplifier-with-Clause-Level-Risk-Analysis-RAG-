@@ -8,6 +8,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
+ENV STANDALONE=true
 RUN npm run build
 
 # Production stage

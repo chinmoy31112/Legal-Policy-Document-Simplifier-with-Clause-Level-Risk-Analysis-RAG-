@@ -1,161 +1,160 @@
 @import "tailwindcss";
 
-/* ── Custom Properties & Design Tokens (Executive Dark Slate & Emerald AI) ── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Design Tokens: "Calm Paper" (Light) & "Midnight Focus" (Dark)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 :root {
-  --font-manrope: 'Manrope', system-ui, sans-serif;
-  --font-plus-jakarta: 'Plus Jakarta Sans', system-ui, sans-serif;
+  /* Fonts */
+  --font-heading: var(--font-fraunces), serif;
+  --font-body: var(--font-inter), sans-serif;
 
-  /* Executive Dark Palette */
-  --bg-dark: #070a11;
-  --bg-card: #0f172a;
-  --bg-card-hover: #1e293b;
-  --bg-surface: #111827;
-  --bg-muted: #1e293b;
-  
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-bright: rgba(255, 255, 255, 0.15);
+  /* Calm Paper (Light) */
+  --background: #FBF7F0;
+  --foreground: #2B2622;
+  --muted-foreground: #6B625A;
+  --card: #FFFFFF;
+  --card-foreground: #2B2622;
+  --border: #E7DFD3;
+  --soft-surface: #F1E8DA;
+  --accent: #B4532A;
+  --accent-foreground: #FFFFFF;
 
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  /* Risk Categories (Light) */
+  --risk-standard-bg: #E3F1E4;
+  --risk-standard-text: #1F5C2E;
+  --risk-standard-border: #C6E2C9;
 
-  /* Brand & Risk Accents */
-  --brand-emerald: #10b981;
-  --brand-teal: #14b8a6;
-  --brand-indigo: #6366f1;
+  --risk-unusual-bg: #FBF0C8;
+  --risk-unusual-text: #6B4F00;
+  --risk-unusual-border: #F4E299;
 
-  --risk-standard: #10b981;
-  --risk-unusual: #eab308;
-  --risk-onesided: #f97316;
-  --risk-high: #ef4444;
-  --risk-unenforceable: #a855f7;
+  --risk-onesided-bg: #FDE3CF;
+  --risk-onesided-text: #8A3B00;
+  --risk-onesided-border: #F7C7A3;
+
+  --risk-high-bg: #FAD7D7;
+  --risk-high-text: #8F1D1D;
+  --risk-high-border: #F4AEAE;
+
+  /* Radii */
+  --radius-card: 18px;
+  --radius-inner: 10px;
+  --radius-pill: 9999px;
 }
 
-/* ── Global Resets ── */
+.dark {
+  /* Midnight Focus (Dark) */
+  --background: #0F1424;
+  --foreground: #E8ECF8;
+  --muted-foreground: #A4ADC8;
+  --card: #171D33;
+  --card-foreground: #E8ECF8;
+  --border: #27304D;
+  --soft-surface: #232B4A;
+  --accent: #8B9BFF;
+  --accent-foreground: #0F1424;
+
+  /* Risk Categories (Dark) */
+  --risk-standard-bg: #16342A;
+  --risk-standard-text: #7BE0A0;
+  --risk-standard-border: #245845;
+
+  --risk-unusual-bg: #3A3216;
+  --risk-unusual-text: #F2D472;
+  --risk-unusual-border: #5C4F22;
+
+  --risk-onesided-bg: #3D2614;
+  --risk-onesided-text: #FFB06B;
+  --risk-onesided-border: #633D20;
+
+  --risk-high-bg: #3F1A22;
+  --risk-high-text: #FF8F9B;
+  --risk-high-border: #6B2C3A;
+}
+
+/* Base Document Setup */
 * {
-  margin: 0;
-  padding: 0;
   box-sizing: border-box;
 }
 
 html, body {
-  background-color: var(--bg-dark);
-  color: var(--text-primary);
-  font-family: var(--font-plus-jakarta), system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
-  overflow-x: hidden;
-}
-
-h1, h2, h3, h4, .font-heading {
-  font-family: var(--font-manrope), system-ui, sans-serif;
-  letter-spacing: -0.025em;
-}
-
-/* Reset default list markers globally to prevent layout leaks */
-ul, ol {
-  list-style: none;
-  padding: 0;
   margin: 0;
+  padding: 0;
+  transition: background-color 150ms ease, color 150ms ease;
 }
 
-/* ── Scrollbars ── */
+/* Headings & Logo Typography: Fraunces 600 */
+h1, h2, h3, h4, .font-serif, .brand-logo {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+/* Subtle clean scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
+
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.5);
+  background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.4);
+  background: var(--border);
   border-radius: 9999px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(16, 185, 129, 0.6);
+  background: var(--muted-foreground);
 }
 
-/* ── Glassmorphism & Visual Effects ── */
-.glass-panel {
-  background: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* PDF Canvas stays light paper in dark mode */
+.pdf-canvas-container {
+  background-color: #FFFFFF !important;
+  color: #1A1A1A !important;
 }
 
-.glass-card {
-  background: rgba(17, 24, 39, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+/* Clause highlight overlays */
+.clause-highlight-standard {
+  background-color: rgba(31, 92, 46, 0.22);
+  border: 1px solid rgba(31, 92, 46, 0.6);
 }
 
-.glass-card:hover {
-  border-color: rgba(16, 185, 129, 0.3);
-  box-shadow: 0 20px 40px -15px rgba(16, 185, 129, 0.15);
-  transform: translateY(-2px);
+.clause-highlight-unusual {
+  background-color: rgba(107, 79, 0, 0.24);
+  border: 1px solid rgba(107, 79, 0, 0.6);
 }
 
-/* ── Glowing Accents & Gradients ── */
-.gradient-emerald {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+.clause-highlight-onesided {
+  background-color: rgba(138, 59, 0, 0.26);
+  border: 1px solid rgba(138, 59, 0, 0.65);
 }
 
-.gradient-indigo {
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+.clause-highlight-highrisk {
+  background-color: rgba(143, 29, 29, 0.3);
+  border: 1px solid rgba(143, 29, 29, 0.7);
 }
 
-.gradient-glow-emerald {
-  box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.4);
+.clause-highlight-selected {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px rgba(180, 83, 42, 0.35);
 }
 
-.gradient-text-emerald {
-  background: linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.gradient-text-indigo {
-  background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* ── Top Government Header Banner ── */
-.gov-header-banner {
-  background: linear-gradient(90deg, #090d16 0%, #111827 50%, #090d16 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  color: #94a3b8;
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
-  padding: 0.4rem 1.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-/* ── Pulse Indicator Animation ── */
-@keyframes pulse-ring {
-  0% { transform: scale(0.95); opacity: 0.8; }
-  50% { transform: scale(1.15); opacity: 0.4; }
-  100% { transform: scale(0.95); opacity: 0.8; }
-}
-
-.pulse-dot {
-  position: relative;
-}
-
-.pulse-dot::before {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 9999px;
-  background: currentColor;
-  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  opacity: 0.4;
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

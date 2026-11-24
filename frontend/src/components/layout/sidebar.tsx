@@ -1,82 +1,145 @@
 "use client";
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { 
-  Shield, 
-  Upload, 
-  BookOpen, 
-  Settings, 
-  LayoutDashboard, 
-  History, 
+import * as React from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  UploadCloud,
+  BookOpen,
+  ShieldCheck,
+  History,
+  Settings,
+  LogOut,
+  X,
   FileText,
-  Sparkles,
-  UserCheck
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/providers/auth-provider";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { useLayout } from "./layout-context";
 
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Upload Document', href: '/upload', icon: Upload },
-  { name: 'My Documents', href: '/documents', icon: FileText },
-  { name: 'Knowledge Base', href: '/dashboard/knowledge-base', icon: BookOpen },
-  { name: 'History', href: '/dashboard/history', icon: History },
+export const NAVIGATION_ITEMS = [
+  {
+    name: "Upload",
+    href: "/upload",
+    icon: UploadCloud,
+    description: "Upload and analyze contracts",
+  },
+  {
+    name: "Knowledge Base",
+    href: "/documents?tab=kb",
+    icon: BookOpen,
+    description: "Standard clauses & benchmarks",
+  },
+  {
+    name: "Analysis",
+    href: "/analysis",
+    icon: ShieldCheck,
+    description: "Interactive clause risk review",
+  },
+  {
+    name: "History",
+    href: "/documents",
+    icon: History,
+    description: "Past analyses & document archive",
+  },
+  {
+    name: "Settings",
+    href: "/settings",
+    icon: Settings,
+    description: "Preferences and GDPR data rights",
+  },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
+  const { isMobileNavOpen, closeMobileNav } = useLayout();
 
-  return (
-    <div className="flex h-full w-64 flex-col bg-[#0b0f19] border-r border-slate-800/80 text-slate-200 select-none">
+  // Close mobile nav on route change
+  React.useEffect(() => {
+    closeMobileNav();
+  }, [pathname, closeMobileNav]);
+
+  // Close on Escape key when mobile nav is open
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isMobileNavOpen) {
+        closeMobileNav();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isMobileNavOpen, closeMobileNav]);
+
+  const navContent = (
+    <div className="flex flex-col h-full w-[224px] bg-[var(--card)] text-[var(--foreground)] border-r border-[var(--border)] select-none">
       {/* Brand Header */}
-      <div className="flex h-20 shrink-0 items-center px-6 border-b border-slate-800/80 bg-[#0b0f19]/80 backdrop-blur-md">
-        <div className="flex items-center gap-3 font-semibold text-lg tracking-tight font-heading">
-          <div className="relative w-10 h-10 rounded-xl gradient-emerald flex items-center justify-center shadow-lg shadow-emerald-500/20 text-white">
-            <Shield className="h-5 w-5" />
-            <Sparkles className="h-3 w-3 absolute -top-1 -right-1 text-emerald-300 animate-pulse" />
+      <div className="flex h-16 shrink-0 items-center justify-between px-4 border-b border-[var(--border)] bg-[var(--card)]">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2.5 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[10px] p-1"
+          aria-label="LegalLens AI Home"
+        >
+          <div className="w-8 h-8 rounded-[10px] bg-[var(--accent)] flex items-center justify-center text-[var(--accent-foreground)] shadow-xs transition-transform duration-150 group-hover:scale-105">
+            <FileText className="h-4 w-4" />
           </div>
-          <div>
-            <div className="font-extrabold text-base leading-tight tracking-tight text-white flex items-center gap-1.5">
-              GovLegal <span className="gradient-text-emerald">AI</span>
-            </div>
-            <div className="text-[10px] font-bold tracking-widest text-emerald-400/90 uppercase">
-              Policy Intelligence
-            </div>
+          <div className="flex flex-col">
+            <span className="font-serif text-base font-semibold tracking-tight leading-none text-[var(--foreground)]">
+              LegalLens
+            </span>
+            <span className="text-[10px] font-medium text-[var(--muted-foreground)] tracking-wide mt-0.5">
+              Policy & Clause AI
+            </span>
           </div>
-        </div>
+        </Link>
+
+        {/* Mobile close button */}
+        <button
+          type="button"
+          onClick={closeMobileNav}
+          aria-label="Close navigation menu"
+          className="md:hidden p-1.5 rounded-[10px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--soft-surface)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
-      {/* Navigation Links */}
-      <div className="flex flex-1 flex-col overflow-y-auto pt-5 pb-4 px-3">
-        <div className="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-          Core Navigation
+      {/* Main Nav Links */}
+      <div className="flex-1 overflow-y-auto px-2.5 py-4 space-y-1">
+        <div className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+          Navigation
         </div>
-        <nav className="flex-1 space-y-1.5">
-          {navigation.map((item) => {
-            const isActive = 
-              pathname === item.href || 
-              (item.href !== '/dashboard' && pathname.startsWith(item.href));
-            
+        <nav className="space-y-1" aria-label="Main Navigation">
+          {NAVIGATION_ITEMS.map((item) => {
+            const isBaseDocuments = item.href === "/documents";
+            const isKbTab = item.href === "/documents?tab=kb";
+
+            let isActive = false;
+            if (isKbTab) {
+              isActive = pathname === "/documents";
+            } else if (isBaseDocuments) {
+              isActive = pathname === "/documents";
+            } else {
+              isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            }
+
             return (
               <Link
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  'group flex items-center rounded-xl px-3.5 py-3 text-sm font-medium transition-all duration-300 relative',
+                  "group flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-1",
                   isActive
-                    ? 'bg-gradient-to-r from-emerald-500/20 to-teal-500/10 text-emerald-400 border border-emerald-500/30 shadow-lg shadow-emerald-500/5'
-                    : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100 border border-transparent'
+                    ? "bg-[var(--soft-surface)] text-[var(--accent)] font-semibold border border-[var(--border)]"
+                    : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--soft-surface)]/60"
                 )}
+                aria-current={isActive ? "page" : undefined}
               >
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-emerald-400 rounded-r-full shadow-sm shadow-emerald-400/50" />
-                )}
                 <item.icon
                   className={cn(
-                    'mr-3 h-5 w-5 flex-shrink-0 transition-all duration-300',
-                    isActive 
-                      ? 'text-emerald-400 scale-110 drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]' 
-                      : 'text-slate-400 group-hover:text-slate-200'
+                    "h-4 w-4 shrink-0 transition-transform duration-150",
+                    isActive ? "text-[var(--accent)]" : "text-[var(--muted-foreground)] group-hover:text-[var(--foreground)]"
                   )}
                   aria-hidden="true"
                 />
@@ -85,40 +148,71 @@ export function Sidebar() {
             );
           })}
         </nav>
+      </div>
 
-        {/* System Settings & Officer Badge */}
-        <div className="pt-4 mt-auto space-y-3">
-          <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            System & Workspace
+      {/* Sidebar Footer: Theme Toggle & User Info */}
+      <div className="p-3 border-t border-[var(--border)] bg-[var(--soft-surface)]/40 shrink-0 space-y-2.5">
+        {/* Theme Switcher */}
+        <div className="flex items-center justify-between px-1">
+          <span className="text-[11px] font-medium text-[var(--muted-foreground)]">Theme</span>
+          <ThemeToggle />
+        </div>
+
+        {/* User Card */}
+        <div className="flex items-center justify-between p-2 rounded-[10px] bg-[var(--card)] border border-[var(--border)]">
+          <div className="min-w-0 pr-2">
+            <p className="text-xs font-medium text-[var(--foreground)] truncate">
+              {user?.full_name || "Legal Reviewer"}
+            </p>
+            <p className="text-[10px] text-[var(--muted-foreground)] truncate">
+              {user?.email || "reviewer@firm.internal"}
+            </p>
           </div>
-          <Link
-            href="/dashboard/settings"
-            className={cn(
-              'group flex items-center rounded-xl px-3.5 py-3 text-sm font-medium transition-all duration-300',
-              pathname === '/dashboard/settings' || pathname === '/settings'
-                ? 'bg-gradient-to-r from-emerald-500/20 to-teal-500/10 text-emerald-400 border border-emerald-500/30'
-                : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100 border border-transparent'
-            )}
+          <button
+            type="button"
+            onClick={logout}
+            aria-label="Log out of application"
+            title="Log out"
+            className="p-1.5 rounded-[8px] text-[var(--muted-foreground)] hover:text-[var(--risk-high-text)] hover:bg-[var(--risk-high-bg)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] shrink-0"
           >
-            <Settings className="mr-3 h-5 w-5 flex-shrink-0 text-slate-400 group-hover:text-slate-200" aria-hidden="true" />
-            System Settings
-          </Link>
-
-          {/* Officer Verification Card */}
-          <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800/90 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-              <UserCheck className="w-4 h-4" />
-            </div>
-            <div className="overflow-hidden">
-              <div className="text-xs font-bold text-slate-200 truncate">Legal Officer</div>
-              <div className="text-[10px] text-emerald-400 font-semibold truncate flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
-                Active Session
-              </div>
-            </div>
-          </div>
+            <LogOut className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
     </div>
+  );
+
+  return (
+    <>
+      {/* Desktop Sidebar (Fixed 224px) */}
+      <aside
+        className="hidden md:flex h-full w-[224px] shrink-0 z-20"
+        aria-label="Desktop Sidebar"
+      >
+        {navContent}
+      </aside>
+
+      {/* Mobile Drawer (Accessible modal with slide-in animation) */}
+      {isMobileNavOpen && (
+        <div
+          className="fixed inset-0 z-50 md:hidden flex"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Mobile Navigation Drawer"
+        >
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+            onClick={closeMobileNav}
+            aria-hidden="true"
+          />
+
+          {/* Drawer Content */}
+          <div className="relative z-50 flex h-full w-[224px] flex-col shadow-2xl animate-in slide-in-from-left duration-200">
+            {navContent}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

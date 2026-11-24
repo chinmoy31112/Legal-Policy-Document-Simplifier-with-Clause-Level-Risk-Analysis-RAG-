@@ -5,44 +5,69 @@ import Link from "next/link";
 import { useDocument } from "@/hooks/use-documents";
 import { useDocumentSummary, useClauseAnalyses } from "@/hooks/use-analysis";
 import { StatusBadge } from "@/components/documents/status-badge";
-
-import { ArrowLeft, Loader2, AlertCircle, Sparkles, FileText, Clock } from "lucide-react";
+import {
+  ArrowLeft,
+  Loader2,
+  AlertCircle,
+  Clock,
+  FileText,
+} from "lucide-react";
 import { AnalysisSummary } from "@/components/analysis/analysis-summary";
-import { ClauseCard } from "@/components/analysis/clause-card";
+import { ClauseDetailPanel } from "@/components/analysis/clause-detail-panel";
 import { DocumentViewer } from "@/components/pdf-viewer/viewer";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export default function AnalysisPage({ params }: { params: Promise<{ id: string }> }) {
+export default function AnalysisPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
   const [activeClauseId, setActiveClauseId] = useState<string | null>(null);
 
   const { data: document, isLoading: docLoading, isError: docError } = useDocument(id);
-
   const isReady = !!document && document.status === "completed";
   const { data: summary, isLoading: summaryLoading } = useDocumentSummary(id, isReady);
   const { data: clauses, isLoading: clausesLoading } = useClauseAnalyses(id, isReady);
 
+  // Loading skeleton state
   if (docLoading) {
     return (
-      <div className="flex h-full items-center justify-center space-y-3 flex-col">
-        <div className="w-10 h-10 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading Executive Analysis Workspace...</p>
+      <div className="space-y-6 animate-in fade-in duration-150">
+        <div className="flex items-center gap-4">
+          <Skeleton className="w-9 h-9" />
+          <div className="space-y-2">
+            <Skeleton className="w-48 h-6" />
+            <Skeleton className="w-24 h-4" />
+          </div>
+        </div>
+        <Skeleton className="w-full h-36" rounded="card" />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[500px]">
+          <Skeleton className="lg:col-span-7 h-[550px]" rounded="card" />
+          <Skeleton className="lg:col-span-5 h-[550px]" rounded="card" />
+        </div>
       </div>
     );
   }
 
+  // Error / Not Found state
   if (docError || !document) {
     return (
-      <div className="p-12 text-center text-red-400 max-w-md mx-auto my-12 bg-slate-900 border border-red-500/30 rounded-3xl shadow-2xl">
-        <AlertCircle className="w-10 h-10 mx-auto mb-4 text-red-400" />
-        <h3 className="text-lg font-bold text-slate-100 mb-1">Document Record Not Found</h3>
-        <p className="text-xs text-slate-400 mb-6">
-          The requested document analysis could not be located in the active database.
+      <div className="p-8 sm:p-12 text-center max-w-md mx-auto my-12 bg-[var(--card)] border border-[var(--risk-high-border)] rounded-[18px] shadow-sm">
+        <div className="w-12 h-12 rounded-[14px] bg-[var(--risk-high-bg)] flex items-center justify-center mx-auto mb-4 text-[var(--risk-high-text)]">
+          <AlertCircle className="w-6 h-6" />
+        </div>
+        <h3 className="font-serif text-lg font-semibold text-[var(--foreground)] mb-1">
+          Document Not Found
+        </h3>
+        <p className="text-xs text-[var(--muted-foreground)] mb-6 leading-relaxed">
+          The requested document analysis could not be located. It may have been removed or you may have followed an expired link.
         </p>
         <Link
           href="/documents"
-          className="px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-950 rounded-xl bg-emerald-400 hover:bg-emerald-300 transition-all inline-block shadow-md shadow-emerald-500/20"
+          className="inline-flex items-center justify-center px-4 py-2 text-xs font-medium text-[var(--accent-foreground)] rounded-[10px] bg-[var(--accent)] hover:opacity-90 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
         >
-          Return to Document Repository
+          Return to Documents
         </Link>
       </div>
     );
@@ -52,147 +77,132 @@ export default function AnalysisPage({ params }: { params: Promise<{ id: string 
     document.status
   );
 
+  const selectedClause = (clauses || []).find((c) => c.id === activeClauseId) || (clauses && clauses.length > 0 ? clauses[0] : null);
+
   const handleClauseSelect = (clauseId: string) => {
     setActiveClauseId(clauseId === activeClauseId ? null : clauseId);
-
-    if (clauseId !== activeClauseId) {
-      const element = window.document.getElementById(`card-${clauseId}`);
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    }
   };
 
   return (
-    <div className="h-full flex flex-col select-none">
+    <div className="flex-1 flex flex-col space-y-6 select-none">
       {/* Workspace Header */}
-      <div className="flex items-center justify-between mb-6 shrink-0 border-b border-slate-800/80 pb-4">
-        <div className="flex items-center space-x-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--border)] shrink-0">
+        <div className="flex items-center gap-3.5">
           <Link
             href="/documents"
-            className="p-2.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl transition-all text-slate-300 hover:text-white"
+            className="p-2 rounded-[10px] bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--soft-surface)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+            aria-label="Return to document list"
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <div>
-            <h1 className="text-xl lg:text-2xl font-extrabold font-heading text-slate-100 tracking-tight flex items-center gap-2">
-              <FileText className="w-5 h-5 text-emerald-400" />
-              {document.original_filename}
+            <h1 className="font-serif text-lg sm:text-xl font-semibold text-[var(--foreground)] tracking-tight flex items-center gap-2">
+              <FileText className="w-4 h-4 text-[var(--accent)] shrink-0" />
+              <span className="truncate max-w-md sm:max-w-xl">{document.original_filename}</span>
             </h1>
-            <div className="flex items-center space-x-3 mt-1 text-xs">
-              <span className="text-slate-400 capitalize font-medium">
-                Category: {document.document_type.replace("_", " ")}
-              </span>
-              <span className="text-slate-700">•</span>
+            <div className="flex items-center gap-2 mt-0.5 text-xs text-[var(--muted-foreground)]">
+              <span className="capitalize">{document.document_type.replace(/_/g, " ")}</span>
+              <span>•</span>
               <StatusBadge status={document.status} />
             </div>
           </div>
         </div>
       </div>
 
+      {/* Processing / In-Progress State */}
       {isProcessing ? (
-        <div className="flex-1 flex flex-col items-center justify-center border border-slate-800 rounded-3xl bg-slate-900/90 shadow-2xl p-12 text-center relative overflow-hidden">
-          <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-6 text-emerald-400 shadow-lg shadow-emerald-500/10">
-            <Loader2 className="w-8 h-8 animate-spin" />
+        <div className="p-12 text-center rounded-[18px] border border-[var(--border)] bg-[var(--card)] flex flex-col items-center justify-center min-h-[350px]">
+          <div className="w-12 h-12 rounded-[14px] bg-[var(--soft-surface)] flex items-center justify-center mb-4 text-[var(--accent)]">
+            <Loader2 className="w-6 h-6 animate-spin" />
           </div>
-          <h2 className="text-xl font-bold font-heading text-slate-100 mb-2">
-            AI Clause Extraction & RAG Benchmarking in Progress
+          <h2 className="font-serif text-base font-semibold text-[var(--foreground)] mb-1">
+            Analyzing Contract Clauses...
           </h2>
-          <p className="text-xs text-slate-400 max-w-md leading-relaxed">
-            Our pipeline is extracting clause text, retrieving reference standards, and generating structured Gemini 3.5 risk models. Results will load automatically.
+          <p className="text-xs text-[var(--muted-foreground)] max-w-sm leading-relaxed">
+            Extracting clauses, comparing against commercial benchmarks, and generating plain English simplifications. This view updates automatically.
           </p>
         </div>
       ) : document.status === "waiting for quota" ? (
-        <div className="flex-1 flex flex-col items-center justify-center border border-amber-500/30 rounded-3xl bg-amber-950/15 p-12 text-center shadow-2xl">
-          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-6 text-amber-400 shadow-lg shadow-amber-500/10">
-            <Clock className="w-8 h-8 animate-pulse" />
+        <div className="p-12 text-center rounded-[18px] border border-[var(--risk-unusual-border)] bg-[var(--risk-unusual-bg)] flex flex-col items-center justify-center min-h-[350px]">
+          <div className="w-12 h-12 rounded-[14px] bg-[var(--card)] flex items-center justify-center mb-4 text-[var(--risk-unusual-text)]">
+            <Clock className="w-6 h-6 animate-pulse" />
           </div>
-          <h2 className="text-xl font-bold font-heading text-slate-100 mb-2">
-            Waiting for Daily Gemini Quota Reset
+          <h2 className="font-serif text-base font-semibold text-[var(--risk-unusual-text)] mb-1">
+            Daily Quota Limit Reached
           </h2>
-          <p className="text-xs text-amber-200/80 max-w-lg leading-relaxed mb-4">
-            {(document.metadata as Record<string, string> | undefined)?.quota_notice ||
-              "Daily Gemini API request quota reached for this model tier. The analysis job is safely paused and will resume automatically when Google's quota resets at 00:00 UTC."}
+          <p className="text-xs text-[var(--risk-unusual-text)] max-w-md leading-relaxed">
+            The Google Gemini API quota for this tier is temporarily exhausted. The document state is safely preserved and will automatically resume.
           </p>
-          <div className="text-[11px] font-mono text-slate-400 bg-slate-900/80 px-4 py-2 rounded-xl border border-slate-800">
-            All completed clauses are saved in database checkpoint. No progress will be lost.
-          </div>
         </div>
       ) : document.status === "failed" ? (
-        <div className="flex-1 flex items-center justify-center border border-red-500/30 rounded-3xl bg-red-950/10 p-12 text-center">
-          <div className="max-w-md">
-            <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-            <h2 className="text-xl font-bold font-heading text-slate-100 mb-2">Analysis Task Encountered an Error</h2>
-            <p className="text-xs text-slate-400 mb-6 leading-relaxed">
-              There was an issue analyzing this document. This usually happens if the PDF is password-protected or unreadable text format.
-            </p>
-            <Link
-              href="/upload"
-              className="px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-950 rounded-xl bg-emerald-400 hover:bg-emerald-300 transition-all inline-block shadow-md"
-            >
-              Re-upload Document
-            </Link>
+        <div className="p-12 text-center rounded-[18px] border border-[var(--risk-high-border)] bg-[var(--card)] flex flex-col items-center justify-center min-h-[350px]">
+          <div className="w-12 h-12 rounded-[14px] bg-[var(--risk-high-bg)] flex items-center justify-center mb-4 text-[var(--risk-high-text)]">
+            <AlertCircle className="w-6 h-6" />
           </div>
+          <h2 className="font-serif text-base font-semibold text-[var(--foreground)] mb-1">
+            Analysis Could Not Be Completed
+          </h2>
+          <p className="text-xs text-[var(--muted-foreground)] max-w-md mb-6 leading-relaxed">
+            The document could not be processed. This typically occurs with encrypted PDFs, scanned raster images without machine-readable text, or corrupt files.
+          </p>
+          <Link
+            href="/upload"
+            className="inline-flex items-center justify-center px-4 py-2 text-xs font-medium text-[var(--accent-foreground)] rounded-[10px] bg-[var(--accent)] hover:opacity-90 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+          >
+            Upload Another Document
+          </Link>
         </div>
       ) : (
-        <div className="flex-1 flex overflow-hidden border border-slate-800 rounded-3xl shadow-2xl bg-slate-900/90">
-          {/* Left Panel: Executive Summary & Clause Breakdown Cards */}
-          <div className="w-1/2 flex flex-col border-r border-slate-800 bg-slate-950/60 overflow-hidden">
-            <div className="flex-1 overflow-y-auto p-6 space-y-8">
-              {summaryLoading ? (
-                <div className="space-y-4 animate-pulse">
-                  <div className="h-36 bg-slate-900 rounded-2xl border border-slate-800 w-full" />
-                </div>
-              ) : summary ? (
-                <div>
-                  <AnalysisSummary analysis={summary} documentId={id} />
-                </div>
-              ) : null}
+        <div className="space-y-6 flex-1 flex flex-col">
+          {/* Top Overall Risk Summary & Risk Count Chips */}
+          {summaryLoading ? (
+            <Skeleton className="w-full h-36" rounded="card" />
+          ) : summary ? (
+            <AnalysisSummary analysis={summary} documentId={id} />
+          ) : null}
 
-              <div>
-                <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
-                  <h3 className="font-bold text-base font-heading text-slate-100 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-emerald-400" /> Clause Risk Breakdown
-                  </h3>
-                  <span className="text-[11px] font-semibold text-slate-400 bg-slate-900 px-3 py-1 rounded-full border border-slate-800">
-                    {clauses?.length || 0} Clauses Evaluated
-                  </span>
-                </div>
-
-                {clausesLoading ? (
-                  <div className="space-y-4 animate-pulse">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-28 bg-slate-900 rounded-2xl border border-slate-800 w-full" />
-                    ))}
-                  </div>
-                ) : clauses && clauses.length > 0 ? (
-                  <div className="space-y-4">
-                    {clauses.map((clauseAnalysis) => (
-                      <div key={clauseAnalysis.id} id={`card-${clauseAnalysis.id}`}>
-                        <ClauseCard
-                          clause={clauseAnalysis}
-                          isSelected={activeClauseId === clauseAnalysis.id}
-                          onClick={() => handleClauseSelect(clauseAnalysis.id)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-400 py-8 text-center">No clauses found for this document.</p>
-                )}
-              </div>
+          {/* Two-Column Workspace: Viewer (Left) + Detail Panel (Right) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-start min-h-[600px]">
+            {/* Left Column: PDF Viewer with Clause List and Search */}
+            <div className="lg:col-span-7 xl:col-span-7 h-[650px] lg:h-[750px]">
+              {clausesLoading ? (
+                <Skeleton className="w-full h-full" rounded="card" />
+              ) : (
+                <DocumentViewer
+                  document={document}
+                  clauses={clauses || []}
+                  activeClauseId={activeClauseId}
+                  onClauseSelect={handleClauseSelect}
+                  className="h-full"
+                />
+              )}
             </div>
-          </div>
 
-          {/* Right Panel: Interactive Document Viewer */}
-          <div className="w-1/2 flex flex-col bg-slate-950/90 relative">
-            {!clausesLoading && clauses && (
-              <DocumentViewer
-                document={document}
-                clauses={clauses}
-                activeClauseId={activeClauseId}
-                onClauseSelect={handleClauseSelect}
+            {/* Right Column: Clause Detail Panel (Desktop) */}
+            <div className="hidden lg:block lg:col-span-5 xl:col-span-5 h-[650px] lg:h-[750px] sticky top-20">
+              <ClauseDetailPanel
+                clause={selectedClause}
+                className="h-full"
               />
+            </div>
+
+            {/* Mobile Bottom Sheet (Narrow Screens) */}
+            {activeClauseId && (
+              <div
+                className="lg:hidden fixed inset-x-0 bottom-0 z-50 p-4 bg-black/50 backdrop-blur-xs flex justify-center"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Clause Details Sheet"
+              >
+                <div className="w-full max-w-lg max-h-[80vh] bg-[var(--card)] rounded-t-[18px] border border-[var(--border)] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-200">
+                  <div className="w-12 h-1.5 bg-[var(--border)] rounded-full mx-auto my-2 shrink-0" />
+                  <ClauseDetailPanel
+                    clause={selectedClause}
+                    onClose={() => setActiveClauseId(null)}
+                    className="border-none rounded-none shadow-none flex-1"
+                  />
+                </div>
+              </div>
             )}
           </div>
         </div>

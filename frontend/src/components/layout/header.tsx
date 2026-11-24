@@ -1,7 +1,9 @@
 "use client";
 
-import { Search, Bell, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import * as React from "react";
+import Link from "next/link";
+import { Menu, UploadCloud } from "lucide-react";
+import { useLayout } from "./layout-context";
 
 interface HeaderProps {
   title?: string;
@@ -9,46 +11,55 @@ interface HeaderProps {
 }
 
 export function Header({ title, subtitle }: HeaderProps) {
-  const [searchQuery, setSearchQuery] = useState("");
+  const { toggleMobileNav } = useLayout();
 
   return (
-    <header className="sticky top-0 z-30 h-20 flex items-center justify-between px-6 lg:px-8 bg-[#070a11]/90 backdrop-blur-xl border-b border-slate-800/80 transition-all duration-300">
-      {/* Page title */}
-      <div>
-        {title && (
-          <h1 className="text-xl lg:text-2xl font-extrabold font-heading text-slate-100 tracking-tight flex items-center gap-2">
-            {title}
-          </h1>
-        )}
-        {subtitle && (
-          <p className="text-xs text-slate-400 mt-0.5 font-medium">{subtitle}</p>
-        )}
+    <header className="sticky top-0 z-10 h-16 flex items-center justify-between px-4 lg:px-6 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border)] shrink-0 transition-colors">
+      {/* Left: Mobile Menu Trigger + Title */}
+      <div className="flex items-center gap-3 min-w-0">
+        <button
+          type="button"
+          onClick={toggleMobileNav}
+          aria-label="Open navigation menu"
+          className="md:hidden p-2 rounded-[10px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--soft-surface)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+
+        <div className="min-w-0">
+          {title && (
+            <h1 className="text-base lg:text-lg font-serif font-semibold text-[var(--foreground)] tracking-tight truncate">
+              {title}
+            </h1>
+          )}
+          {subtitle && (
+            <p className="text-[11px] text-[var(--muted-foreground)] truncate hidden sm:block">
+              {subtitle}
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* Right side: Search + System Status */}
-      <div className="flex items-center gap-4">
-        <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>ENTERPRISE RAG ACTIVE</span>
+      {/* Right Controls */}
+      <div className="flex items-center gap-2.5 shrink-0">
+        {/* Status Pill */}
+        <div
+          className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--risk-standard-bg)] border border-[var(--risk-standard-border)] text-[var(--risk-standard-text)] text-[11px] font-medium"
+          aria-label="System status: Gemini RAG Active"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--risk-standard-text)] animate-pulse" />
+          <span>Gemini RAG Active</span>
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search contracts, clauses, or legislation..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-64 lg:w-80 pl-10 pr-4 py-2 text-xs rounded-xl bg-slate-900/90 text-slate-100 placeholder:text-slate-500 focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 border border-slate-800 transition-all duration-300"
-          />
-        </div>
-
-        {/* Notifications */}
-        <button className="relative p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 transition-all duration-300">
-          <Bell className="w-4 h-4 text-emerald-400" />
-          <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-        </button>
+        {/* Quick CTA */}
+        <Link
+          href="/upload"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--accent-foreground)] rounded-[10px] bg-[var(--accent)] hover:opacity-90 active:scale-[0.98] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-1"
+        >
+          <UploadCloud className="w-3.5 h-3.5" />
+          <span className="hidden xs:inline">Analyze</span>
+          <span>Contract</span>
+        </Link>
       </div>
     </header>
   );

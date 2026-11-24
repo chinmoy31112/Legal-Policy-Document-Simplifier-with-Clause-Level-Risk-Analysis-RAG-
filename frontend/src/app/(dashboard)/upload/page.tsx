@@ -3,7 +3,6 @@
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { useRouter } from "next/navigation";
-import { Header } from "@/components/layout/header";
 import {
   UploadCloud,
   File as FileIcon,
@@ -11,11 +10,12 @@ import {
   Loader2,
   AlertCircle,
   ShieldCheck,
-  Zap,
+  Scale,
   Sparkles,
-  ArrowRight
+  ArrowRight,
 } from "lucide-react";
 import { useUploadDocument } from "@/hooks/use-documents";
+import { Button } from "@/components/ui/button";
 
 export default function UploadPage() {
   const router = useRouter();
@@ -31,7 +31,7 @@ export default function UploadPage() {
     }
   }, []);
 
-  const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
       "application/pdf": [".pdf"],
@@ -58,170 +58,202 @@ export default function UploadPage() {
   };
 
   return (
-    <>
-      <Header
-        title="Upload Legal Agreement or Policy"
-        subtitle="Initiate automated AI clause segmentation, RAG benchmarking, and risk quantification"
-      />
-      <div className="mx-auto max-w-4xl space-y-6">
-        {/* Statutory Legal Disclaimer Notice */}
-        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-3 shadow-lg select-none">
-          <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-          <div className="space-y-0.5 leading-relaxed font-medium">
-            <span className="font-bold uppercase tracking-wider text-amber-400">Important Notice: </span>
-            <span>
-              This application simplifies legal documents and calculates risk indicators for informational review. It does not provide legal advice or replace formal review by a qualified legal professional.
-            </span>
+    <div className="space-y-6 max-w-4xl mx-auto select-none">
+      {/* Page Header */}
+      <div>
+        <h1 className="font-serif text-2xl font-semibold text-[var(--foreground)] tracking-tight">
+          Upload Contract or Policy
+        </h1>
+        <p className="text-xs text-[var(--muted-foreground)] mt-1">
+          Initiate structural clause segmentation, vector similarity retrieval, and objective risk scoring
+        </p>
+      </div>
+
+      {/* Statutory Legal Disclaimer Notice */}
+      <div
+        role="note"
+        aria-label="Legal Notice"
+        className="p-3.5 rounded-[14px] bg-[var(--soft-surface)] border border-[var(--border)] text-xs text-[var(--muted-foreground)] flex items-start gap-2.5"
+      >
+        <Scale className="w-4 h-4 text-[var(--accent)] shrink-0 mt-0.5" />
+        <p className="leading-relaxed">
+          <strong className="text-[var(--foreground)]">Information, not legal advice:</strong> This application simplifies agreements and benchmarks risk indicators for workflow assistance. It does not provide legal opinions or formal attorney counsel.
+        </p>
+      </div>
+
+      {/* Upload Card Container */}
+      <div className="p-6 sm:p-8 rounded-[18px] bg-[var(--card)] border border-[var(--border)] shadow-none space-y-6">
+        {/* Document Classification Selectors */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="space-y-1.5">
+            <label
+              htmlFor="doc-type-select"
+              className="text-xs font-semibold text-[var(--foreground)] flex items-center gap-1.5"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span>Document Category</span>
+            </label>
+            <select
+              id="doc-type-select"
+              className="flex h-10 w-full rounded-[10px] bg-[var(--card)] border border-[var(--border)] px-3 text-xs text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors"
+              value={docType}
+              onChange={(e) => setDocType(e.target.value)}
+            >
+              <option value="terms_and_conditions">Terms of Service / Terms of Use</option>
+              <option value="privacy_policy">Privacy Policy & Data Processing</option>
+              <option value="employment_contract">Employment Agreement</option>
+              <option value="rental_agreement">Commercial Lease / Rental</option>
+              <option value="loan_agreement">Loan & Financial Agreement</option>
+              <option value="eula">End User License Agreement (EULA)</option>
+              <option value="nda">Non-Disclosure Agreement (NDA)</option>
+              <option value="other">General Commercial Agreement</option>
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label
+              htmlFor="jurisdiction-select"
+              className="text-xs font-semibold text-[var(--foreground)] flex items-center gap-1.5"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span>Jurisdiction Baseline</span>
+            </label>
+            <select
+              id="jurisdiction-select"
+              className="flex h-10 w-full rounded-[10px] bg-[var(--card)] border border-[var(--border)] px-3 text-xs text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors"
+              value={jurisdiction}
+              onChange={(e) => setJurisdiction(e.target.value)}
+            >
+              <option value="US">United States (Federal & State Baseline)</option>
+              <option value="EU">European Union (GDPR / Consumer Directives)</option>
+              <option value="UK">United Kingdom (UK GDPR / Common Law)</option>
+              <option value="GLOBAL">International / Multi-Jurisdictional</option>
+            </select>
           </div>
         </div>
 
-        <div className="p-8 lg:p-10 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl space-y-8 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 blur-[100px] rounded-full pointer-events-none" />
+        {/* Drag & Drop Zone */}
+        <div
+          {...getRootProps()}
+          className={`border-2 border-dashed rounded-[18px] p-8 sm:p-10 text-center transition-all cursor-pointer relative overflow-hidden group select-none ${
+            isDragActive
+              ? "border-[var(--accent)] bg-[var(--soft-surface)] scale-[1.01]"
+              : file
+              ? "border-[var(--border)] bg-[var(--soft-surface)]/40"
+              : "border-[var(--border)] hover:border-[var(--accent)] bg-[var(--soft-surface)]/20 hover:bg-[var(--soft-surface)]/50"
+          }`}
+          data-testid="upload-dropzone"
+        >
+          <input {...getInputProps()} aria-label="Drop legal contract file here" />
 
-          <div className="space-y-6 relative z-10">
-            {/* Configuration Selectors */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-emerald-400" /> Document Category
-                </label>
-                <select
-                  className="flex h-12 w-full rounded-xl bg-slate-950 border border-slate-800 px-4 py-2 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none transition-all"
-                  value={docType}
-                  onChange={(e) => setDocType(e.target.value)}
-                >
-                  <option value="terms_and_conditions">Terms of Service / Agreement</option>
-                  <option value="privacy_policy">Privacy Policy & Data Terms</option>
-                  <option value="employment_contract">Employment Contract</option>
-                  <option value="rental_agreement">Rental / Lease Agreement</option>
-                  <option value="loan_agreement">Loan & Financial Agreement</option>
-                  <option value="eula">End User License Agreement (EULA)</option>
-                  <option value="other">Other General Contract</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Governing Jurisdiction
-                </label>
-                <select
-                  className="flex h-12 w-full rounded-xl bg-slate-950 border border-slate-800 px-4 py-2 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none transition-all"
-                  value={jurisdiction}
-                  onChange={(e) => setJurisdiction(e.target.value)}
-                >
-                  <option value="US">United States (Federal Standard)</option>
-                  <option value="US-CA">California, US (CCPA Standard)</option>
-                  <option value="US-NY">New York, US</option>
-                  <option value="UK">United Kingdom (UK GDPR)</option>
-                  <option value="EU">European Union (GDPR Standard)</option>
-                  <option value="IN">India (DPDP Standard)</option>
-                  <option value="AU">Australia</option>
-                  <option value="OTHER">International / General</option>
-                </select>
-              </div>
+          <div className="flex flex-col items-center justify-center space-y-3">
+            <div
+              className={`w-14 h-14 rounded-[14px] flex items-center justify-center transition-transform duration-200 group-hover:scale-105 ${
+                file
+                  ? "bg-[var(--risk-standard-bg)] text-[var(--risk-standard-text)] border border-[var(--risk-standard-border)]"
+                  : "bg-[var(--soft-surface)] border border-[var(--border)] text-[var(--muted-foreground)] group-hover:text-[var(--accent)]"
+              }`}
+            >
+              <UploadCloud className="w-7 h-7" />
             </div>
 
-            {/* Drag & Drop Zone */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                Document File (PDF, DOCX, TXT)
-              </label>
-
-              {!file ? (
-                <div
-                  {...getRootProps()}
-                  className={`
-                    border-2 border-dashed rounded-3xl p-10 text-center cursor-pointer transition-all duration-300 bg-slate-950/60
-                    ${
-                      isDragActive
-                        ? "border-emerald-400 bg-emerald-500/10 shadow-lg shadow-emerald-500/10"
-                        : "border-slate-800 hover:border-emerald-500/50 hover:bg-slate-900/90"
-                    }
-                    ${isDragReject ? "border-red-500 bg-red-500/10" : ""}
-                  `}
-                >
-                  <input {...getInputProps()} />
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 mb-4 shadow-lg shadow-emerald-500/10">
-                    <UploadCloud className="h-8 w-8" />
-                  </div>
-                  <h3 className="text-base font-bold font-heading text-slate-100">
-                    {isDragActive
-                      ? "Release to upload agreement..."
-                      : "Drag & drop document here, or click to browse"}
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-2 font-medium">
-                    Supports PDF (with PyMuPDF OCR fallback), DOCX, and TXT (Up to 50MB)
-                  </p>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between p-5 rounded-2xl bg-slate-950 border border-emerald-500/30 shadow-lg shadow-emerald-500/5">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                      <FileIcon className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold font-heading text-slate-100">{file.name}</p>
-                      <p className="text-xs text-slate-400">
-                        {(file.size / 1024 / 1024).toFixed(2)} MB • Ready for Analysis
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setFile(null);
-                    }}
-                    className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
-                    disabled={uploadMutation.isPending}
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {uploadMutation.isError && (
-              <div className="p-4 bg-red-500/10 border border-red-500/30 text-red-400 text-xs rounded-xl flex items-start font-medium shadow-md">
-                <AlertCircle className="h-4 w-4 mr-2.5 shrink-0 mt-0.5" />
-                <span>
-                  {uploadMutation.error instanceof Error
-                    ? uploadMutation.error.message
-                    : "An error occurred during document upload. Please try again."}
-                </span>
+            {file ? (
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-[var(--foreground)] flex items-center justify-center gap-1.5">
+                  <FileIcon className="w-4 h-4 text-[var(--accent)]" />
+                  <span>{file.name}</span>
+                </p>
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  {(file.size / (1024 * 1024)).toFixed(2)} MB • Ready for clause extraction
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-[var(--foreground)]">
+                  {isDragActive
+                    ? "Drop the contract here to upload..."
+                    : "Drag & drop a contract or click to browse"}
+                </p>
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Accepts machine-readable PDFs, DOCX, and TXT files up to 50MB
+                </p>
               </div>
             )}
-          </div>
 
-          <div className="flex items-center justify-between pt-6 border-t border-slate-800 relative z-10">
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <Sparkles className="w-4 h-4 text-emerald-400" />
-              <span>Automated Gemini 3.5 RAG Analysis</span>
+            <div className="flex items-center gap-1.5 pt-1 text-[11px] font-medium text-[var(--muted-foreground)]">
+              <span className="px-2 py-0.5 rounded-[6px] bg-[var(--card)] border border-[var(--border)]">PDF</span>
+              <span className="px-2 py-0.5 rounded-[6px] bg-[var(--card)] border border-[var(--border)]">DOCX</span>
+              <span className="px-2 py-0.5 rounded-[6px] bg-[var(--card)] border border-[var(--border)]">TXT</span>
             </div>
+          </div>
+        </div>
 
+        {/* Selected File Chip */}
+        {file && (
+          <div className="flex items-center justify-between p-3.5 rounded-[12px] bg-[var(--soft-surface)] border border-[var(--border)]">
+            <div className="flex items-center space-x-3 truncate">
+              <div className="w-8 h-8 rounded-[8px] bg-[var(--card)] border border-[var(--border)] flex items-center justify-center text-[var(--accent)] shrink-0">
+                <FileIcon className="w-4 h-4" />
+              </div>
+              <div className="truncate">
+                <div className="text-xs font-semibold text-[var(--foreground)] truncate">{file.name}</div>
+                <div className="text-[10px] text-[var(--muted-foreground)]">
+                  {(file.size / 1024).toFixed(0)} KB • Validated format
+                </div>
+              </div>
+            </div>
             <button
               type="button"
               onClick={(e) => {
-                e.preventDefault();
-                handleUpload();
+                e.stopPropagation();
+                setFile(null);
               }}
-              disabled={!file || uploadMutation.isPending}
-              className="inline-flex items-center justify-center gap-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 hover:from-emerald-300 hover:to-teal-300 h-12 px-8 shadow-lg shadow-emerald-500/20 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02]"
+              aria-label="Remove selected file"
+              className="p-1 text-[var(--muted-foreground)] hover:text-[var(--risk-high-text)] rounded-[6px] hover:bg-[var(--card)] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]"
             >
-              {uploadMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin text-slate-950" />
-                  Initializing Pipeline...
-                </>
-              ) : (
-                <>
-                  Launch AI Analysis <ArrowRight className="w-4 h-4" />
-                </>
-              )}
+              <X className="w-4 h-4" />
             </button>
           </div>
+        )}
+
+        {/* Error Message */}
+        {uploadMutation.isError && (
+          <div
+            role="alert"
+            className="p-3.5 rounded-[12px] bg-[var(--risk-high-bg)] border border-[var(--risk-high-border)] text-[var(--risk-high-text)] text-xs flex items-center gap-2"
+          >
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>
+              {uploadMutation.error instanceof Error
+                ? uploadMutation.error.message
+                : "Upload failed. Please ensure the document is a readable, text-based PDF."}
+            </span>
+          </div>
+        )}
+
+        {/* Action Button */}
+        <div className="flex justify-end pt-2">
+          <Button
+            size="lg"
+            onClick={handleUpload}
+            disabled={!file || uploadMutation.isPending}
+            className="w-full sm:w-auto"
+            data-testid="upload-submit-btn"
+          >
+            {uploadMutation.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                <span>Processing Clauses & Embeddings...</span>
+              </>
+            ) : (
+              <>
+                <span>Begin Clause Risk Analysis</span>
+                <ArrowRight className="w-4 h-4 ml-1" />
+              </>
+            )}
+          </Button>
         </div>
       </div>
-    </>
+    </div>
   );
 }

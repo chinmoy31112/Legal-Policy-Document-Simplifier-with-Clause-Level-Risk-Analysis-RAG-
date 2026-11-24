@@ -1,23 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useTransition, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useDocuments, useDeleteDocument } from "@/hooks/use-documents";
 import { StatusBadge } from "@/components/documents/status-badge";
-import { Header } from "@/components/layout/header";
 import {
   FileText,
   Trash2,
   ArrowRight,
-  Upload,
+  UploadCloud,
   Search,
   Filter,
-  Clock,
-  AlertTriangle
+  AlertTriangle,
+  Download,
+  BookOpen,
+  History,
 } from "lucide-react";
+import { API_BASE_URL } from "@/lib/constants";
+import { Button } from "@/components/ui/button";
+import { RiskChip } from "@/components/ui/risk-chip";
 
-export default function DocumentsPage() {
+function DocumentsContent() {
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab") === "kb" ? "kb" : "history";
+  const [activeTab, setActiveTab] = useState<"history" | "kb">(initialTab);
   const [searchTerm, setSearchTerm] = useState("");
+  const [, startTransition] = useTransition();
+
   const { data, isLoading, isError } = useDocuments(1, 50);
   const deleteMutation = useDeleteDocument();
 
@@ -28,145 +38,241 @@ export default function DocumentsPage() {
     doc.document_type.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  return (
-    <>
-      <Header
-        title="Document Repository"
-        subtitle="Full archive of uploaded policy agreements, audited clauses, and risk metrics"
-      />
-      <div className="space-y-6">
-        {/* Top Control Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl">
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1 sm:w-80">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Filter documents by name or type..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none transition-all"
-              />
-            </div>
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs font-bold text-slate-400">
-              <Filter className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{filteredDocs.length} Documents</span>
-            </div>
-          </div>
+  const handleExport = (docId: string, format: "json" | "markdown") => {
+    const url = `${API_BASE_URL}/documents/${docId}/export/${format}`;
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
-          <Link
-            href="/upload"
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-950 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 shadow-md shadow-emerald-500/20 transition-all duration-300 hover:scale-[1.02]"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            Upload New Document
-          </Link>
+    fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => res.blob())
+      .then((blob) => {
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = window.document.createElement("a");
+        a.href = downloadUrl;
+        a.download = `contract_analysis.${format === "json" ? "json" : "md"}`;
+        window.document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+      })
+      .catch((err) => console.error("Export download failed:", err));
+  };
+
+  return (
+    <div className="space-y-6 select-none max-w-6xl mx-auto">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="font-serif text-2xl font-semibold text-[var(--foreground)] tracking-tight">
+            {activeTab === "kb" ? "Knowledge Base & Benchmarks" : "Document Repository"}
+          </h1>
+          <p className="text-xs text-[var(--muted-foreground)] mt-1">
+            {activeTab === "kb"
+              ? "Reference commercial clauses and standard baseline precedents for RAG retrieval"
+              : "Complete history of uploaded agreements, audited clauses, and risk metrics"}
+          </p>
         </div>
 
-        {/* Documents Table View */}
-        <div className="rounded-3xl bg-slate-900/90 border border-slate-800 overflow-hidden shadow-2xl">
-          {isLoading ? (
-            <div className="p-16 text-center text-slate-400 text-xs space-y-3">
-              <div className="w-8 h-8 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin mx-auto" />
-              <p>Fetching legal document repository...</p>
+        {/* Tab Switcher */}
+        <div className="flex items-center rounded-[10px] bg-[var(--soft-surface)] p-1 border border-[var(--border)] shrink-0">
+          <button
+            type="button"
+            onClick={() => startTransition(() => setActiveTab("history"))}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-xs font-medium transition-all ${
+              activeTab === "history"
+                ? "bg-[var(--card)] text-[var(--foreground)] font-semibold shadow-xs border border-[var(--border)]"
+                : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            }`}
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>Document History</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => startTransition(() => setActiveTab("kb"))}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-xs font-medium transition-all ${
+              activeTab === "kb"
+                ? "bg-[var(--card)] text-[var(--foreground)] font-semibold shadow-xs border border-[var(--border)]"
+                : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Knowledge Base</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Control Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-[14px] bg-[var(--card)] border border-[var(--border)]">
+        <div className="flex flex-wrap items-center gap-2.5 flex-1">
+          <div className="relative flex-1 sm:max-w-xs">
+            <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-[var(--muted-foreground)] pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search contracts by name or type..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full h-9 pl-9 pr-3 rounded-[10px] bg-[var(--soft-surface)] border border-[var(--border)] text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+              aria-label="Search contracts"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[8px] bg-[var(--soft-surface)] border border-[var(--border)] text-xs font-medium text-[var(--muted-foreground)]">
+            <Filter className="w-3 h-3 text-[var(--accent)]" />
+            <span>{filteredDocs.length} Documents</span>
+          </div>
+        </div>
+
+        <Link href="/upload">
+          <Button size="sm" className="w-full sm:w-auto">
+            <UploadCloud className="w-3.5 h-3.5 mr-1" />
+            <span>Upload Contract</span>
+          </Button>
+        </Link>
+      </div>
+
+      {/* Documents Table */}
+      <div className="rounded-[18px] bg-[var(--card)] border border-[var(--border)] overflow-hidden shadow-none">
+        {isLoading ? (
+          <div className="p-12 text-center text-[var(--muted-foreground)] text-xs space-y-3">
+            <div className="w-7 h-7 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin mx-auto" />
+            <p>Loading document repository...</p>
+          </div>
+        ) : isError ? (
+          <div className="p-8 text-center text-[var(--risk-high-text)] text-xs bg-[var(--risk-high-bg)] border border-[var(--risk-high-border)] m-4 rounded-[14px] flex items-center justify-center gap-2">
+            <AlertTriangle className="w-4 h-4" />
+            <span>Failed to load documents. Please ensure the backend service is reachable.</span>
+          </div>
+        ) : filteredDocs.length === 0 ? (
+          <div className="p-12 text-center text-[var(--muted-foreground)] flex flex-col items-center">
+            <div className="w-12 h-12 rounded-[14px] bg-[var(--soft-surface)] flex items-center justify-center mb-3 text-[var(--muted-foreground)]">
+              <FileText className="w-6 h-6" />
             </div>
-          ) : isError ? (
-            <div className="p-12 text-center text-red-400 text-xs bg-red-500/10 border border-red-500/20 m-6 rounded-2xl flex items-center justify-center gap-2">
-              <AlertTriangle className="w-4 h-4" />
-              <span>Failed to load documents from database. Please ensure backend is running.</span>
-            </div>
-          ) : filteredDocs.length === 0 ? (
-            <div className="p-16 text-center text-slate-400 flex flex-col items-center">
-              <div className="w-16 h-16 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center mb-4 text-slate-500">
-                <FileText className="w-8 h-8" />
-              </div>
-              <h3 className="text-base font-bold text-slate-200 mb-1">No Matching Documents Found</h3>
-              <p className="text-xs text-slate-400 max-w-sm mb-6">
-                {searchTerm
-                  ? `No results matching "${searchTerm}". Try resetting your filter.`
-                  : "Upload your first legal document to begin clause extraction and RAG risk benchmarking."}
-              </p>
-              <Link
-                href="/upload"
-                className="px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-950 rounded-xl bg-emerald-400 hover:bg-emerald-300 transition-all shadow-md shadow-emerald-500/20"
-              >
-                Upload Document
-              </Link>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead className="text-[11px] font-bold uppercase tracking-wider text-slate-400 bg-slate-950/60 border-b border-slate-800">
-                  <tr>
-                    <th className="px-6 py-4">Document Title</th>
-                    <th className="px-6 py-4">Category</th>
-                    <th className="px-6 py-4">Analysis Status</th>
-                    <th className="px-6 py-4">Date Uploaded</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60 font-medium">
-                  {filteredDocs.map((doc) => (
-                    <tr key={doc.id} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="px-6 py-4 text-slate-200 font-bold flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                          <FileText className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="truncate max-w-xs font-heading text-sm text-slate-100">{doc.original_filename}</div>
-                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">ID: {doc.id.substring(0, 8)}...</div>
+            <h3 className="font-serif text-sm font-semibold text-[var(--foreground)] mb-1">
+              No Documents Found
+            </h3>
+            <p className="text-xs text-[var(--muted-foreground)] max-w-sm mb-5 leading-relaxed">
+              {searchTerm
+                ? `No agreements match "${searchTerm}". Try resetting your filter.`
+                : "Upload your first legal document to begin clause extraction and benchmark risk analysis."}
+            </p>
+            <Link href="/upload">
+              <Button size="sm">
+                <UploadCloud className="w-3.5 h-3.5 mr-1" />
+                <span>Upload Document</span>
+              </Button>
+            </Link>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)] bg-[var(--soft-surface)]/70 border-b border-[var(--border)]">
+                <tr>
+                  <th className="py-3 px-5">Document Name</th>
+                  <th className="py-3 px-5">Category</th>
+                  <th className="py-3 px-5">Risk Rating</th>
+                  <th className="py-3 px-5">Status</th>
+                  <th className="py-3 px-5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {filteredDocs.map((doc) => {
+                  const riskScore = doc.overall_risk_score;
+                  let riskCategory = "standard";
+                  if (riskScore !== null && riskScore !== undefined) {
+                    if (riskScore >= 75) riskCategory = "high_risk";
+                    else if (riskScore >= 50) riskCategory = "one_sided";
+                    else if (riskScore >= 25) riskCategory = "slightly_unusual";
+                  }
+
+                  return (
+                    <tr
+                      key={doc.id}
+                      className="hover:bg-[var(--soft-surface)]/40 transition-colors group"
+                    >
+                      <td className="py-3.5 px-5 font-medium text-[var(--foreground)]">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-[8px] bg-[var(--soft-surface)] border border-[var(--border)] flex items-center justify-center text-[var(--accent)] shrink-0">
+                            <FileText className="w-3.5 h-3.5" />
+                          </div>
+                          <span className="truncate max-w-xs font-semibold">
+                            {doc.original_filename}
+                          </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 capitalize text-slate-300">
-                        <span className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-[11px]">
-                          {doc.document_type.replace("_", " ")}
-                        </span>
+                      <td className="py-3.5 px-5 text-[var(--muted-foreground)] capitalize">
+                        {doc.document_type.replace(/_/g, " ")}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="py-3.5 px-5">
+                        {riskScore !== null && riskScore !== undefined ? (
+                          <RiskChip category={riskCategory} score={riskScore} size="sm" />
+                        ) : (
+                          <span className="text-[var(--muted-foreground)] italic text-[11px]">Pending</span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-5">
                         <StatusBadge status={doc.status} />
                       </td>
-                      <td className="px-6 py-4 text-slate-400">
-                        <div className="flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-slate-500" />
-                          {new Date(doc.created_at).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                      <td className="py-3.5 px-5 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Link href={`/analysis/${doc.id}`}>
+                            <Button variant="outline" size="sm" className="h-7 text-xs">
+                              <span>Open</span>
+                              <ArrowRight className="w-3 h-3 ml-1" />
+                            </Button>
+                          </Link>
+
+                          {doc.status === "completed" && (
+                            <button
+                              type="button"
+                              onClick={() => handleExport(doc.id, "markdown")}
+                              aria-label={`Download Markdown export for ${doc.original_filename}`}
+                              title="Download Markdown Report"
+                              className="p-1.5 rounded-[8px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--soft-surface)] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
                           <button
+                            type="button"
                             onClick={() => {
-                              if (confirm("Are you sure you want to delete this document and its clause analyses?")) {
+                              if (window.confirm(`Are you sure you want to delete "${doc.original_filename}"? This action cannot be undone.`)) {
                                 deleteMutation.mutate(doc.id);
                               }
                             }}
-                            disabled={deleteMutation.isPending}
-                            className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                            aria-label={`Delete ${doc.original_filename}`}
                             title="Delete Document"
+                            className="p-1.5 rounded-[8px] text-[var(--muted-foreground)] hover:text-[var(--risk-high-text)] bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--risk-high-bg)] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
-
-                          <Link
-                            href={`/analysis/${doc.id}`}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all shadow-sm"
-                          >
-                            {doc.status === "completed" ? "View Analysis" : "View Status"}
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </Link>
                         </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
-    </>
+    </div>
+  );
+}
+
+export default function DocumentsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-12 text-center text-xs text-[var(--muted-foreground)] space-y-2">
+          <div className="w-6 h-6 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin mx-auto" />
+          <p>Loading document repository...</p>
+        </div>
+      }
+    >
+      <DocumentsContent />
+    </Suspense>
   );
 }
