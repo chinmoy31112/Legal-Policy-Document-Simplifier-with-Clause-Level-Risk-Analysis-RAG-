@@ -7,10 +7,8 @@ import {
   FileSearch,
   Zap,
   ArrowRight,
-  CheckCircle2,
   Brain,
-  Sparkles,
-  Lock
+  Sparkles
 } from "lucide-react";
 
 const features = [

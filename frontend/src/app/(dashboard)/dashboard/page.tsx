@@ -8,9 +8,7 @@ import Link from "next/link";
 import {
   FileText,
   Shield,
-  AlertTriangle,
   CheckCircle2,
-  TrendingUp,
   Upload,
   ArrowRight,
   Sparkles,

@@ -6,7 +6,6 @@ Includes pagination, generic API responses, and reusable base schemas.
 
 from datetime import datetime
 from typing import Any, Generic, TypeVar
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -15,6 +14,7 @@ T = TypeVar("T")
 
 class PaginationParams(BaseModel):
     """Pagination query parameters."""
+
     page: int = Field(default=1, ge=1, description="Page number")
     page_size: int = Field(default=20, ge=1, le=100, description="Items per page")
 
@@ -25,6 +25,7 @@ class PaginationParams(BaseModel):
 
 class PaginatedResponse(BaseModel, Generic[T]):
     """Generic paginated response wrapper."""
+
     items: list[T]
     total: int
     page: int
@@ -50,6 +51,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
 class APIResponse(BaseModel, Generic[T]):
     """Standard API response envelope."""
+
     success: bool = True
     data: T | None = None
     message: str | None = None
@@ -57,18 +59,22 @@ class APIResponse(BaseModel, Generic[T]):
 
 class ErrorResponse(BaseModel):
     """Standard error response."""
+
     error: dict[str, Any] = Field(
         ...,
-        examples=[{
-            "type": "ValidationError",
-            "message": "Invalid input.",
-            "code": "VALIDATION_ERROR",
-        }],
+        examples=[
+            {
+                "type": "ValidationError",
+                "message": "Invalid input.",
+                "code": "VALIDATION_ERROR",
+            }
+        ],
     )
 
 
 class TimestampSchema(BaseModel):
     """Base schema with timestamp fields."""
+
     model_config = ConfigDict(from_attributes=True)
     created_at: datetime
     updated_at: datetime | None = None

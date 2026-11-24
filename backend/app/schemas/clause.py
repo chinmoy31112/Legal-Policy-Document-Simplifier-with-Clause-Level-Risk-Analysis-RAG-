@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class ClauseResponse(BaseModel):
     """Individual clause data."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID

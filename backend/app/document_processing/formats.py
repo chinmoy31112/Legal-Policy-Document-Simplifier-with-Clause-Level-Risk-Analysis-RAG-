@@ -10,7 +10,7 @@ from pathlib import Path
 
 from app.core.logging import get_logger
 from app.document_processing.extractor import ExtractionResult, extract_pdf
-from app.document_processing.ocr_fallback import ocr_pdf, is_ocr_available
+from app.document_processing.ocr_fallback import is_ocr_available, ocr_pdf
 
 logger = get_logger(__name__)
 
@@ -25,9 +25,7 @@ def extract_docx(file_path: str | Path) -> ExtractionResult:
 
     file_path = Path(file_path)
     if not file_path.exists():
-        return ExtractionResult(
-            raw_text="", errors=[f"File not found: {file_path}"]
-        )
+        return ExtractionResult(raw_text="", errors=[f"File not found: {file_path}"])
 
     try:
         from docx import Document as DocxDocument
@@ -52,14 +50,16 @@ def extract_docx(file_path: str | Path) -> ExtractionResult:
 
         # Detect headings from paragraph styles
         style_name = paragraph.style.name if paragraph.style else ""
-        is_heading = style_name.lower().startswith("heading") or style_name.lower().startswith("title")
+        is_heading = style_name.lower().startswith("heading") or style_name.lower().startswith(
+            "title"
+        )
 
         # Check for bold runs
         is_bold = any(run.bold for run in paragraph.runs if run.bold is not None)
 
         block = TextBlock(
             text=text,
-            page_number=1,  # DOCX doesn't have page numbers directly
+            page=1,  # DOCX doesn't have page numbers directly
             block_index=idx,
             is_heading=is_heading,
             is_bold=is_bold,
@@ -98,9 +98,7 @@ def extract_text_file(file_path: str | Path) -> ExtractionResult:
 
     file_path = Path(file_path)
     if not file_path.exists():
-        return ExtractionResult(
-            raw_text="", errors=[f"File not found: {file_path}"]
-        )
+        return ExtractionResult(raw_text="", errors=[f"File not found: {file_path}"])
 
     try:
         raw_text = file_path.read_text(encoding="utf-8")
@@ -115,7 +113,7 @@ def extract_text_file(file_path: str | Path) -> ExtractionResult:
     blocks = [
         TextBlock(
             text=para,
-            page_number=1,
+            page=1,
             block_index=idx,
             is_heading=para.startswith("#") or para.isupper(),
         )
@@ -146,9 +144,7 @@ def extract_json_file(file_path: str | Path) -> ExtractionResult:
 
     file_path = Path(file_path)
     if not file_path.exists():
-        return ExtractionResult(
-            raw_text="", errors=[f"File not found: {file_path}"]
-        )
+        return ExtractionResult(raw_text="", errors=[f"File not found: {file_path}"])
 
     try:
         data = json.loads(file_path.read_text(encoding="utf-8"))
@@ -164,16 +160,16 @@ def extract_json_file(file_path: str | Path) -> ExtractionResult:
         if isinstance(clauses, list):
             for idx, clause in enumerate(clauses):
                 if isinstance(clause, dict):
-                    title = clause.get("title", clause.get("heading", ""))
-                    content = clause.get("content", clause.get("text", ""))
+                    title = str(clause.get("title") or clause.get("heading") or "")
+                    content = str(clause.get("content") or clause.get("text") or "")
                     text = f"{title}\n{content}" if title else content
                 else:
-                    text = str(clause)
+                    text = str(clause) if clause is not None else ""
 
                 if text.strip():
                     block = TextBlock(
                         text=text.strip(),
-                        page_number=1,
+                        page=1,
                         block_index=idx,
                         is_heading=False,
                     )
@@ -185,14 +181,14 @@ def extract_json_file(file_path: str | Path) -> ExtractionResult:
         for idx, item in enumerate(data):
             text = str(item) if not isinstance(item, dict) else json.dumps(item)
             if text.strip():
-                blocks.append(TextBlock(text=text.strip(), page_number=1, block_index=idx))
+                blocks.append(TextBlock(text=text.strip(), page=1, block_index=idx))
                 all_text_parts.append(text.strip())
 
     raw_text = "\n\n".join(all_text_parts)
     metadata = {"format": "json"}
     if isinstance(data, dict):
-        metadata["title"] = data.get("title", data.get("document_type", ""))
-        metadata["document_type"] = data.get("document_type", "")
+        metadata["title"] = str(data.get("title") or data.get("document_type") or "")
+        metadata["document_type"] = str(data.get("document_type") or "")
 
     return ExtractionResult(
         raw_text=raw_text,

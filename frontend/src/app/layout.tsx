@@ -1,23 +1,8 @@
 import type { Metadata } from "next";
-import { Manrope, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/providers/query-provider";
 import { AuthProvider } from "@/providers/auth-provider";
 import { ShieldCheck, Lock } from "lucide-react";
-
-const manrope = Manrope({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-manrope",
-  display: "swap",
-});
-
-const plusJakartaSans = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-plus-jakarta",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "GovLegal AI | Executive Legal & Policy Intelligence Portal",
@@ -31,8 +16,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${manrope.variable} ${plusJakartaSans.variable} dark`}>
-      <body className={`${plusJakartaSans.className} bg-[#070a11] text-slate-100 min-h-screen antialiased flex flex-col`}>
+    <html lang="en" className="dark">
+      <body className="bg-[#070a11] text-slate-100 min-h-screen antialiased flex flex-col font-sans">
         {/* Top Government & Enterprise Compliance Banner */}
         <div className="gov-header-banner shrink-0 select-none">
           <div className="max-w-7xl mx-auto w-full flex items-center justify-between">

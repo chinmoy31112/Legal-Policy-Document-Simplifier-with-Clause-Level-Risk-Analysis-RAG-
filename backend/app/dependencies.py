@@ -5,7 +5,7 @@ Provides database session, service instances, and other shared dependencies
 to FastAPI route handlers via Depends().
 """
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession
 

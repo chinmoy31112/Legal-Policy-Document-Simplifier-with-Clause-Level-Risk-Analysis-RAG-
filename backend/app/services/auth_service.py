@@ -8,6 +8,9 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import AuthenticationError, ValidationError
+from app.core.logging import get_logger
+from app.core.metrics import track_auth_failure
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -15,11 +18,9 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.core.exceptions import AuthenticationError, ValidationError
-from app.core.logging import get_logger
 from app.models.user import User
 from app.repositories.user_repo import UserRepository
-from app.schemas.auth import TokenResponse, UserResponse
+from app.schemas.auth import TokenResponse
 
 logger = get_logger(__name__)
 
@@ -62,9 +63,11 @@ class AuthService:
         user = await self.user_repo.get_by_email(email)
 
         if user is None or not verify_password(password, user.hashed_password):
+            track_auth_failure()
             raise AuthenticationError("Invalid email or password.")
 
         if not user.is_active:
+            track_auth_failure()
             raise AuthenticationError("Account is deactivated.")
 
         access_token = create_access_token(subject=str(user.id))
@@ -119,3 +122,33 @@ class AuthService:
         if user is None:
             raise AuthenticationError("User not found.")
         return user
+
+    async def delete_account(self, user_id: UUID) -> None:
+        """
+        Delete a user account and all associated data (GDPR delete-my-data).
+        Cleans up local upload files and cascades deletions in DB.
+        """
+        user = await self.user_repo.get_by_id(user_id)
+        if user is None:
+            raise AuthenticationError("User not found.")
+
+        # Clean up user's upload directory
+        import shutil
+
+        from app.core.config import get_settings
+
+        cfg = get_settings()
+        user_dir = cfg.upload_path / str(user_id)
+        if user_dir.exists():
+            shutil.rmtree(user_dir, ignore_errors=True)
+
+        # Explicitly delete user documents first to purge all cascade records
+        from sqlalchemy import delete
+
+        from app.models.document import Document
+        await self.session.execute(delete(Document).where(Document.user_id == user_id))
+
+        # Delete user record
+        await self.user_repo.delete(user_id)
+        await self.session.commit()
+        logger.info("user_account_deleted", user_id=str(user_id))

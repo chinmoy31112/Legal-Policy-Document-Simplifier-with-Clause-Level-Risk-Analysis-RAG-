@@ -9,7 +9,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 
-from app.schemas.common import APIResponse
 from app.api.v1.deps import get_current_user_id
 
 router = APIRouter()

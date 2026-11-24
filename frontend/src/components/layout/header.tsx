@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Bell, Sparkles, ShieldCheck } from "lucide-react";
+import { Search, Bell, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 interface HeaderProps {

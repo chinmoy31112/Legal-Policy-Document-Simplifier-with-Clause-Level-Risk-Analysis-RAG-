@@ -9,7 +9,7 @@ from sqlalchemy import Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.database import Base, UUIDMixin, TimestampMixin
+from app.core.database import Base, TimestampMixin, UUIDMixin
 
 
 class AnalysisResult(Base, UUIDMixin, TimestampMixin):
@@ -18,18 +18,21 @@ class AnalysisResult(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "analysis_results"
 
     clause_id: Mapped["UUID"] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("clauses.id", ondelete="CASCADE"),
-        nullable=False, unique=True, index=True
+        UUID(as_uuid=True),
+        ForeignKey("clauses.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
     )
     document_id: Mapped["UUID"] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"),
-        nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     plain_english_summary: Mapped[str] = mapped_column(Text, nullable=False)
     risk_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    risk_category: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="standard"
-    )
+    risk_category: Mapped[str] = mapped_column(String(50), nullable=False, default="standard")
     risk_reasons: Mapped[list | None] = mapped_column(JSONB, nullable=True, default=list)
     retrieved_clauses: Mapped[list | None] = mapped_column(JSONB, nullable=True, default=list)
     missing_protections: Mapped[list | None] = mapped_column(JSONB, nullable=True, default=list)
@@ -52,8 +55,11 @@ class DocumentAnalysis(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "document_analysis"
 
     document_id: Mapped["UUID"] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"),
-        nullable=False, unique=True, index=True
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
     )
     overall_risk_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     overall_summary: Mapped[str | None] = mapped_column(Text, nullable=True)

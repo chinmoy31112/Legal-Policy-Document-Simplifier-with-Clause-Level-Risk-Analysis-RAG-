@@ -3,14 +3,14 @@ Repositories package.
 """
 
 from app.repositories.base import BaseRepository
-from app.repositories.user_repo import UserRepository
-from app.repositories.document_repo import DocumentRepository
 from app.repositories.clause_repo import ClauseRepository
-from app.repositories.knowledge_base_repo import KBDocumentRepository, KBClauseRepository
+from app.repositories.document_repo import DocumentRepository
+from app.repositories.knowledge_base_repo import KBClauseRepository, KBDocumentRepository
+from app.repositories.user_repo import UserRepository
 
 __all__ = [
-    "BaseRepository", 
-    "UserRepository", 
+    "BaseRepository",
+    "UserRepository",
     "DocumentRepository",
     "ClauseRepository",
     "KBDocumentRepository",

@@ -13,6 +13,12 @@ export function StatusBadge({ status }: { status: string }) {
       label = "Completed";
       break;
 
+    case "waiting for quota":
+      badgeStyle = "bg-amber-500/15 text-amber-400 border-amber-500/30 shadow-sm shadow-amber-500/10";
+      icon = <Clock className="w-3.5 h-3.5 text-amber-400 animate-pulse" />;
+      label = "Waiting for Quota";
+      break;
+
     case "analyzing":
     case "extracting":
     case "segmenting":

@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class DocumentType(StrEnum):
     """Supported legal document types."""
+
     TERMS_AND_CONDITIONS = "terms_and_conditions"
     PRIVACY_POLICY = "privacy_policy"
     RENTAL_AGREEMENT = "rental_agreement"
@@ -26,17 +27,20 @@ class DocumentType(StrEnum):
 
 class DocumentStatus(StrEnum):
     """Document processing status."""
+
     UPLOADED = "uploaded"
     EXTRACTING = "extracting"
     SEGMENTING = "segmenting"
     EMBEDDING = "embedding"
     ANALYZING = "analyzing"
+    WAITING_FOR_QUOTA = "waiting for quota"
     COMPLETED = "completed"
     FAILED = "failed"
 
 
 class DocumentUploadResponse(BaseModel):
     """Response after a successful document upload."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -51,6 +55,7 @@ class DocumentUploadResponse(BaseModel):
 
 class DocumentListItem(BaseModel):
     """Condensed document info for list views."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -66,6 +71,7 @@ class DocumentListItem(BaseModel):
 
 class DocumentDetail(BaseModel):
     """Full document details including metadata."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID

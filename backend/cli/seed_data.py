@@ -16,7 +16,7 @@ async def seed_data():
     """Seed the database with JSON files from the knowledge_base directory."""
     project_root = Path(__file__).parent.parent
     kb_dir = project_root / "knowledge_base" / "standard_clauses"
-    
+
     if not kb_dir.exists():
         print(f"Error: Knowledge base directory not found at {kb_dir}")
         return
@@ -32,34 +32,34 @@ async def seed_data():
         def __init__(self, filename, content):
             self.filename = filename
             self._content = content
-            
+
         async def read(self):
             return self._content
 
     async with async_session_factory() as session:
         service = KnowledgeBaseService(session)
-        
+
         for file_path in json_files:
             print(f"Processing {file_path.name}...")
-            
+
             with open(file_path, "rb") as f:
                 content = f.read()
-                
+
             upload_file = MockUploadFile(file_path.name, content)
-            
+
             # Derive title and doc type from filename
             doc_type = file_path.stem
             title = doc_type.replace("_", " ").title()
-            
+
             try:
                 # First check if it already exists to avoid duplicates
                 existing, _ = await service.get_all_documents(limit=100)
                 if any(doc.title == title for doc in existing):
                     print(f"  Skipping {title} (already exists)")
                     continue
-                    
+
                 result = await service.ingest_document(
-                    file=upload_file, # type: ignore
+                    file=upload_file,  # type: ignore
                     title=title,
                     document_type=doc_type,
                 )
@@ -67,7 +67,7 @@ async def seed_data():
             except Exception as e:
                 print(f"  Error processing {file_path.name}: {e}")
                 await session.rollback()
-                
+
         print("Seeding complete!")
 
 

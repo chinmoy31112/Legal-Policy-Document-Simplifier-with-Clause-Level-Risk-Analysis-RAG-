@@ -1,15 +1,17 @@
 """
-PDF and document text extraction using PyMuPDF.
+PyMuPDF span-level text and layout extractor.
 
-Extracts structured text from PDF documents with heading detection,
-paragraph awareness, and scanned-PDF detection.
+Pure functions: zero database access, zero network calls.
+Extracts font size, weight, line bounding boxes, and detects scanned/corrupt/encrypted files.
 """
 
 import re
-from dataclasses import dataclass, field
+from collections import Counter
 from pathlib import Path
+from typing import Any
 
 from app.core.logging import get_logger
+from app.document_processing.schema import ExtractionResult, TextBlock, TextSpan
 
 logger = get_logger(__name__)
 
@@ -17,230 +19,294 @@ try:
     import fitz  # PyMuPDF
 except ImportError:
     fitz = None
-    logger.warning("pymupdf_not_installed", message="PyMuPDF is not installed. PDF extraction unavailable.")
+    logger.warning("pymupdf_missing", message="PyMuPDF not installed.")
+
+# Minimum average characters per page to consider a document machine-readable text
+MIN_TEXT_CHARS_PER_PAGE = 25
 
 
-@dataclass
-class TextBlock:
-    """A block of text extracted from a document page."""
-    text: str
-    page_number: int
-    block_index: int
-    is_heading: bool = False
-    is_bold: bool = False
-    font_size: float = 0.0
-    bbox: tuple[float, float, float, float] = (0, 0, 0, 0)
+class DocumentProcessingError(Exception):
+    """Base exception for document extraction failures."""
+
+    pass
 
 
-@dataclass
-class ExtractionResult:
-    """Result of text extraction from a document."""
-    raw_text: str
-    blocks: list[TextBlock] = field(default_factory=list)
-    page_count: int = 0
-    is_scanned: bool = False
-    metadata: dict = field(default_factory=dict)
-    errors: list[str] = field(default_factory=list)
+class ScannedDocumentError(DocumentProcessingError):
+    """Raised or flagged when an uploaded PDF is an image-only scan."""
+
+    pass
 
 
-def _detect_scanned_pdf(doc) -> bool:
+class EncryptedDocumentError(DocumentProcessingError):
+    """Raised or flagged when an uploaded PDF is password-protected."""
+
+    pass
+
+
+class CorruptDocumentError(DocumentProcessingError):
+    """Raised or flagged when an uploaded file cannot be parsed or is empty."""
+
+    pass
+
+
+def is_scanned_pdf(doc: Any) -> bool:
     """
-    Heuristic to detect if a PDF is scanned (image-only).
-
-    Checks the first few pages: if they have images but very little
-    extractable text, the PDF is likely scanned.
+    Determine if a PyMuPDF Document is a scanned raster document with no text layer.
     """
     if doc.page_count == 0:
         return False
 
-    pages_to_check = min(3, doc.page_count)
-    text_chars = 0
-    image_count = 0
+    pages_to_sample = min(5, doc.page_count)
+    total_chars = 0
+    total_images = 0
 
-    for page_idx in range(pages_to_check):
-        page = doc[page_idx]
+    for i in range(pages_to_sample):
+        page = doc[i]
         text = page.get_text("text").strip()
-        text_chars += len(text)
-        image_count += len(page.get_images(full=True))
+        total_chars += len(text)
+        total_images += len(page.get_images())
 
-    # If we have images but almost no text, it's likely scanned
-    avg_chars = text_chars / pages_to_check
-    if image_count > 0 and avg_chars < 50:
+    avg_chars = total_chars / pages_to_sample
+    # Scanned: has image streams but virtually zero extractable characters
+    if avg_chars < MIN_TEXT_CHARS_PER_PAGE and total_images > 0:
+        return True
+    if total_chars == 0 and total_images > 0:
         return True
     return False
 
 
-def _is_heading_block(block_dict: dict, median_font_size: float) -> bool:
+def _detect_heading(
+    text: str,
+    font_size: float,
+    is_bold: bool,
+    body_font_size: float,
+) -> bool:
     """
-    Determine if a text block is a heading based on font properties.
-
-    Heuristic: block is a heading if:
-    - Font size is significantly larger than the median
-    - Text is all uppercase
-    - Text is bold
-    - Text matches common legal heading patterns
+    Heuristically identify whether a block is a legal heading or title.
     """
-    text = block_dict.get("text", "").strip()
-    if not text or len(text) > 200:
+    cleaned = text.strip()
+    if not cleaned or len(cleaned) > 200:
         return False
 
-    # Check for common legal heading patterns
-    heading_patterns = [
-        r"^(?:ARTICLE|SECTION|CLAUSE|PART|CHAPTER|SCHEDULE|APPENDIX|EXHIBIT)\s",
-        r"^(?:DEFINITIONS|TERMINATION|INDEMNIFICATION|GOVERNING LAW|DISPUTE RESOLUTION)",
-        r"^\d+\.\s+[A-Z][A-Z\s]+$",  # "1. DEFINITIONS"
-        r"^[IVXLCDM]+\.\s+",  # Roman numerals
+    # Heading legal patterns
+    heading_regexes = [
+        r"^(?:ARTICLE|SECTION|CLAUSE|PART|SCHEDULE|APPENDIX|EXHIBIT)\s+[\dIVXLCDM]+",
+        r"^\d+(\.\d+)*\.?\s+[A-Z]",
+        r"^\([a-z\d]+\)\s+[A-Z]",
+        r"^(?:RECITALS|DEFINITIONS|INDEMNIFICATION|LIMITATION OF LIABILITY|TERMINATION|GOVERNING LAW|CONFIDENTIALITY|MISCELLANEOUS)\b",
     ]
-    for pattern in heading_patterns:
-        if re.match(pattern, text, re.IGNORECASE):
+    for pattern in heading_regexes:
+        if re.match(pattern, cleaned, re.IGNORECASE):
             return True
 
-    # Check font size (> 1.2x median = likely heading)
-    font_size = block_dict.get("font_size", 0)
-    if median_font_size > 0 and font_size > median_font_size * 1.2:
+    # Typography signals
+    if body_font_size > 0 and font_size >= body_font_size * 1.15:
         return True
-
-    # All-caps short text is likely a heading
-    if text.isupper() and len(text) < 100:
+    if is_bold and len(cleaned) < 120 and (cleaned.isupper() or cleaned.istitle()):
         return True
 
     return False
 
 
-def extract_pdf(file_path: str | Path) -> ExtractionResult:
+def extract_pdf(
+    file_input: str | Path | bytes,
+    raise_on_error: bool = False,
+) -> ExtractionResult:
     """
-    Extract text and structure from a PDF file using PyMuPDF.
+    Extract structured text blocks, spans, and bounding boxes from a PDF.
 
     Args:
-        file_path: Path to the PDF file.
+        file_input: File path (str/Path) or raw PDF bytes.
+        raise_on_error: If True, raises custom exceptions; if False, returns ExtractionResult with flags.
 
     Returns:
-        ExtractionResult with extracted text, blocks, and metadata.
+        ExtractionResult populated with blocks, metadata, and error flags.
     """
     if fitz is None:
+        err = "PyMuPDF (fitz) is not installed."
+        if raise_on_error:
+            raise DocumentProcessingError(err)
+        return ExtractionResult(raw_text="", errors=[err], is_corrupt=True)
+
+    # Validate file presence or byte length
+    if isinstance(file_input, (str, Path)):
+        path = Path(file_input)
+        if not path.exists() or path.stat().st_size == 0:
+            err = f"File is empty or not found: {path}"
+            if raise_on_error:
+                raise CorruptDocumentError(err)
+            return ExtractionResult(raw_text="", errors=[err], is_corrupt=True)
+        try:
+            doc = fitz.open(str(path))
+        except Exception as exc:
+            err = f"Corrupt PDF file: {exc}"
+            if raise_on_error:
+                raise CorruptDocumentError(err) from exc
+            return ExtractionResult(raw_text="", errors=[err], is_corrupt=True)
+    elif isinstance(file_input, (bytes, bytearray)):
+        if len(file_input) == 0:
+            err = "Supplied PDF byte array is empty."
+            if raise_on_error:
+                raise CorruptDocumentError(err)
+            return ExtractionResult(raw_text="", errors=[err], is_corrupt=True)
+        try:
+            doc = fitz.open(stream=file_input, filetype="pdf")
+        except Exception as exc:
+            err = f"Corrupt PDF byte stream: {exc}"
+            if raise_on_error:
+                raise CorruptDocumentError(err) from exc
+            return ExtractionResult(raw_text="", errors=[err], is_corrupt=True)
+    else:
+        err = f"Unsupported input type: {type(file_input)}"
+        if raise_on_error:
+            raise DocumentProcessingError(err)
+        return ExtractionResult(raw_text="", errors=[err], is_corrupt=True)
+
+    # 1. Check for encrypted / password-protected document
+    if doc.is_encrypted or doc.needs_pass:
+        doc.close()
+        err = "PDF document is encrypted or requires a password."
+        if raise_on_error:
+            raise EncryptedDocumentError(err)
+        return ExtractionResult(raw_text="", is_encrypted=True, errors=[err])
+
+    # 2. Check for empty document
+    if doc.page_count == 0:
+        doc.close()
+        err = "PDF document contains 0 pages."
+        if raise_on_error:
+            raise CorruptDocumentError(err)
+        return ExtractionResult(raw_text="", page_count=0, is_corrupt=True, errors=[err])
+
+    # 3. Check for scanned / raster image PDF
+    if is_scanned_pdf(doc):
+        page_cnt = doc.page_count
+        doc.close()
+        err = "Scanned PDF detected. This system requires digital text-based PDFs with selectable text."
+        if raise_on_error:
+            raise ScannedDocumentError(err)
         return ExtractionResult(
             raw_text="",
-            errors=["PyMuPDF is not installed. Cannot extract PDF text."],
+            page_count=page_cnt,
+            is_scanned=True,
+            errors=[err],
         )
 
-    file_path = Path(file_path)
-    if not file_path.exists():
-        return ExtractionResult(
-            raw_text="",
-            errors=[f"File not found: {file_path}"],
-        )
+    # 4. Extract spans and calculate font distributions
+    raw_blocks: list[TextBlock] = []
+    font_sizes: list[float] = []
+    all_raw_paragraphs: list[str] = []
 
-    try:
-        doc = fitz.open(str(file_path))
-    except Exception as e:
-        logger.error("pdf_open_error", error=str(e), path=str(file_path))
-        return ExtractionResult(
-            raw_text="",
-            errors=[f"Failed to open PDF: {e}"],
-        )
-
-    is_scanned = _detect_scanned_pdf(doc)
-    blocks: list[TextBlock] = []
-    all_text_parts: list[str] = []
-    all_font_sizes: list[float] = []
-
-    # First pass: collect font sizes for median calculation
+    block_global_idx = 0
     for page_idx in range(doc.page_count):
+        page_num = page_idx + 1
         page = doc[page_idx]
-        page_dict = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)
-        for block in page_dict.get("blocks", []):
-            if block.get("type") != 0:  # Skip image blocks
-                continue
-            for line in block.get("lines", []):
-                for span in line.get("spans", []):
-                    size = span.get("size", 0)
-                    if size > 0:
-                        all_font_sizes.append(size)
 
-    median_font_size = sorted(all_font_sizes)[len(all_font_sizes) // 2] if all_font_sizes else 12.0
-
-    # Second pass: extract text blocks with structure
-    for page_idx in range(doc.page_count):
-        page = doc[page_idx]
-        page_dict = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)
-
-        for block_idx, block in enumerate(page_dict.get("blocks", [])):
-            if block.get("type") != 0:  # Skip image blocks
+        # Extract structured layout dictionary
+        page_dict = page.get_text("dict", flags=fitz.TEXTFLAGS_SEARCH)
+        for b in page_dict.get("blocks", []):
+            if b.get("type") != 0:  # Type 0 is text block, 1 is image
                 continue
 
-            block_text_parts = []
-            block_font_sizes = []
-            is_bold = False
+            block_bbox = tuple(round(coord, 2) for coord in b.get("bbox", (0, 0, 0, 0)))
+            block_spans: list[TextSpan] = []
+            block_lines_text: list[str] = []
+            block_font_sizes: list[float] = []
+            block_bold_count = 0
 
-            for line in block.get("lines", []):
-                line_text = ""
-                for span in line.get("spans", []):
-                    text = span.get("text", "")
-                    line_text += text
-                    block_font_sizes.append(span.get("size", 0))
-                    flags = span.get("flags", 0)
-                    if flags & 2**4:  # Bold flag
-                        is_bold = True
-                block_text_parts.append(line_text)
+            for line in b.get("lines", []):
+                line_spans_text: list[str] = []
+                for s in line.get("spans", []):
+                    span_text = s.get("text", "")
+                    if not span_text.strip():
+                        continue
 
-            block_text = "\n".join(block_text_parts).strip()
-            if not block_text:
+                    span_size = round(s.get("size", 10.0), 2)
+                    span_font = s.get("font", "")
+                    flags = s.get("flags", 0)
+
+                    # Bold: bit 4 or font name contains bold / black / heavy
+                    is_bold = bool(
+                        (flags & (1 << 4))
+                        or any(w in span_font.lower() for w in ("bold", "black", "heavy"))
+                    )
+                    # Italic: bit 1 or font name contains italic / oblique
+                    is_italic = bool(
+                        (flags & (1 << 1))
+                        or any(w in span_font.lower() for w in ("italic", "oblique"))
+                    )
+
+                    span_bbox = tuple(round(coord, 2) for coord in s.get("bbox", (0, 0, 0, 0)))
+                    block_spans.append(
+                        TextSpan(
+                            text=span_text,
+                            font=span_font,
+                            size=span_size,
+                            is_bold=is_bold,
+                            is_italic=is_italic,
+                            bbox=span_bbox,  # type: ignore[arg-type]
+                            page=page_num,
+                        )
+                    )
+                    line_spans_text.append(span_text)
+                    block_font_sizes.append(span_size)
+                    font_sizes.append(span_size)
+                    if is_bold:
+                        block_bold_count += 1
+
+                if line_spans_text:
+                    block_lines_text.append(" ".join(line_spans_text).strip())
+
+            full_block_text = "\n".join(block_lines_text).strip()
+            if not full_block_text:
                 continue
 
             avg_font_size = (
-                sum(block_font_sizes) / len(block_font_sizes)
-                if block_font_sizes
-                else median_font_size
+                sum(block_font_sizes) / len(block_font_sizes) if block_font_sizes else 10.0
             )
+            is_majority_bold = (block_bold_count / len(block_spans)) > 0.5 if block_spans else False
 
-            block_info = {
-                "text": block_text,
-                "font_size": avg_font_size,
-                "is_bold": is_bold,
-            }
-            is_heading = _is_heading_block(block_info, median_font_size)
-
-            bbox = block.get("bbox", (0, 0, 0, 0))
-            text_block = TextBlock(
-                text=block_text,
-                page_number=page_idx + 1,
-                block_index=block_idx,
-                is_heading=is_heading,
-                is_bold=is_bold,
-                font_size=avg_font_size,
-                bbox=tuple(bbox),
+            raw_blocks.append(
+                TextBlock(
+                    text=full_block_text,
+                    page=page_num,
+                    block_index=block_global_idx,
+                    spans=block_spans,
+                    bbox=block_bbox,  # type: ignore[arg-type]
+                    font_size=avg_font_size,
+                    is_bold=is_majority_bold,
+                )
             )
-            blocks.append(text_block)
-            all_text_parts.append(block_text)
+            all_raw_paragraphs.append(full_block_text)
+            block_global_idx += 1
 
-    raw_text = "\n\n".join(all_text_parts)
+    # Compute body font size (most common font size)
+    body_font_size = Counter(font_sizes).most_common(1)[0][0] if font_sizes else 10.0
 
-    # Extract document metadata
-    doc_metadata = doc.metadata or {}
-    metadata = {
-        "title": doc_metadata.get("title", ""),
-        "author": doc_metadata.get("author", ""),
-        "subject": doc_metadata.get("subject", ""),
-        "creator": doc_metadata.get("creator", ""),
-        "producer": doc_metadata.get("producer", ""),
+    # Classify headings
+    for block in raw_blocks:
+        block.is_heading = _detect_heading(
+            block.text,
+            block.font_size,
+            block.is_bold,
+            body_font_size,
+        )
+
+    meta = {
+        "title": doc.metadata.get("title", ""),
+        "author": doc.metadata.get("author", ""),
         "page_count": doc.page_count,
+        "body_font_size": body_font_size,
     }
-
-    logger.info(
-        "pdf_extracted",
-        path=str(file_path),
-        pages=metadata["page_count"],
-        blocks=len(blocks),
-        chars=len(raw_text),
-        is_scanned=is_scanned,
-    )
-
+    page_count = doc.page_count
     doc.close()
 
     return ExtractionResult(
-        raw_text=raw_text,
-        blocks=blocks,
-        page_count=metadata["page_count"],
-        is_scanned=is_scanned,
-        metadata=metadata,
+        raw_text="\n\n".join(all_raw_paragraphs),
+        blocks=raw_blocks,
+        page_count=page_count,
+        is_scanned=False,
+        is_encrypted=False,
+        is_corrupt=False,
+        metadata=meta,
     )

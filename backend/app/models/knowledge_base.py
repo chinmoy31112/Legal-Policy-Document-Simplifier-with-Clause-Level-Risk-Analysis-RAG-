@@ -9,7 +9,7 @@ from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.database import Base, UUIDMixin, TimestampMixin
+from app.core.database import Base, TimestampMixin, UUIDMixin
 
 
 class KBDocument(Base, UUIDMixin, TimestampMixin):
@@ -23,15 +23,12 @@ class KBDocument(Base, UUIDMixin, TimestampMixin):
     jurisdiction: Mapped[str | None] = mapped_column(String(100), nullable=True)
     version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="active"
-    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True, default=dict)
 
     # Relationships
     clauses = relationship(
-        "KBClause", back_populates="kb_document", lazy="selectin",
-        cascade="all, delete-orphan"
+        "KBClause", back_populates="kb_document", lazy="selectin", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
@@ -44,8 +41,10 @@ class KBClause(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "kb_clauses"
 
     kb_document_id: Mapped["UUID"] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("kb_documents.id", ondelete="CASCADE"),
-        nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("kb_documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     clause_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
     title: Mapped[str | None] = mapped_column(String(500), nullable=True)

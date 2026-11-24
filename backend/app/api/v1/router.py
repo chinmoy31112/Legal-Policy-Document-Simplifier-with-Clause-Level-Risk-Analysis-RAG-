@@ -6,9 +6,23 @@ Includes all versioned endpoint routers under /api/v1.
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, documents, analysis, knowledge_base, export, search
+from app.api.v1.endpoints import (
+    analysis,
+    auth,
+    documents,
+    export,
+    health,
+    knowledge_base,
+    search,
+)
 
 api_v1_router = APIRouter()
+
+api_v1_router.include_router(
+    health.router,
+    prefix="/health",
+    tags=["Health"],
+)
 
 api_v1_router.include_router(
     auth.router,
@@ -32,6 +46,13 @@ api_v1_router.include_router(
     knowledge_base.router,
     prefix="/knowledge-base",
     tags=["Knowledge Base"],
+)
+
+api_v1_router.include_router(
+    knowledge_base.router,
+    prefix="/kb",
+    tags=["Knowledge Base"],
+    include_in_schema=False,
 )
 
 api_v1_router.include_router(

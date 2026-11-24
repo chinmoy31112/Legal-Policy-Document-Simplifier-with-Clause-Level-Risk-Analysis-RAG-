@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class KBDocumentCreate(BaseModel):
     """Request to create a knowledge base document."""
+
     title: str = Field(..., min_length=1, max_length=500)
     document_type: str
     jurisdiction: str | None = None
@@ -21,6 +22,7 @@ class KBDocumentCreate(BaseModel):
 
 class KBDocumentResponse(BaseModel):
     """Knowledge base document details."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -38,6 +40,7 @@ class KBDocumentResponse(BaseModel):
 
 class KBClauseResponse(BaseModel):
     """Knowledge base clause details."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -51,6 +54,7 @@ class KBClauseResponse(BaseModel):
 
 class KBIngestionRequest(BaseModel):
     """Request to ingest content into the knowledge base."""
+
     title: str
     document_type: str
     jurisdiction: str | None = None
@@ -59,6 +63,7 @@ class KBIngestionRequest(BaseModel):
 
 class KBIngestionResponse(BaseModel):
     """Response after knowledge base ingestion."""
+
     document_id: UUID
     title: str
     clauses_extracted: int

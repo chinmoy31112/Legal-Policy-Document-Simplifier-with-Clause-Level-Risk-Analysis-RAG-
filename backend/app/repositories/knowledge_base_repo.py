@@ -2,14 +2,14 @@
 Knowledge base repository — data access layer for KB models.
 """
 
-from typing import Sequence
+from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.knowledge_base import KBDocument, KBClause
+from app.models.knowledge_base import KBClause, KBDocument
 from app.repositories.base import BaseRepository
 
 
