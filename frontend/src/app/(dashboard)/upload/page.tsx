@@ -58,6 +58,7 @@ export default function UploadPage() {
   };
 
   return (
+<<<<<<< HEAD
     <div className="space-y-6 max-w-4xl mx-auto select-none">
       {/* Page Header */}
       <div>
@@ -68,6 +69,27 @@ export default function UploadPage() {
           Initiate structural clause segmentation, vector similarity retrieval, and objective risk scoring
         </p>
       </div>
+=======
+    <>
+      <Header
+        title="Upload Legal Agreement or Policy"
+        subtitle="Initiate automated AI clause segmentation, RAG benchmarking, and risk quantification"
+      />
+      <div className="mx-auto max-w-4xl space-y-6">
+        {/* Statutory Legal Disclaimer Notice */}
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-3 shadow-lg select-none">
+          <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="space-y-0.5 leading-relaxed font-medium">
+            <span className="font-bold uppercase tracking-wider text-amber-400">Important Notice: </span>
+            <span>
+              This application simplifies legal documents and calculates risk indicators for informational review. It does not provide legal advice or replace formal review by a qualified legal professional.
+            </span>
+          </div>
+        </div>
+
+        <div className="p-8 lg:p-10 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl space-y-8 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 blur-[100px] rounded-full pointer-events-none" />
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
 
       {/* Statutory Legal Disclaimer Notice */}
       <div

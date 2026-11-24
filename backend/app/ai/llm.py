@@ -21,7 +21,11 @@ from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
 from app.ai.interfaces import LLMClient
+<<<<<<< HEAD
 from app.ai.prompts import SYSTEM_INSTRUCTION
+=======
+from app.ai.prompts import REPAIR_PROMPT, SYSTEM_INSTRUCTION
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
 from app.ai.rate_limiter import (
     calculate_jittered_backoff,
     get_model_rate_limiter,
@@ -51,7 +55,11 @@ class GeminiLLMClient(LLMClient):
 
     def __init__(self, model_name: str | None = None, force_offline: bool = False):
         self.settings = get_settings()
+<<<<<<< HEAD
         self._model_name: str = model_name or self.settings.gemini_clause_model or "gemini-3.5-flash-lite"
+=======
+        self._model_name = model_name or self.settings.gemini_llm_model
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
         self._force_offline = force_offline or not bool(self.settings.google_api_key.strip())
         self._rate_limiter = get_model_rate_limiter(self._model_name)
         self._prompt_cache: dict[str, Any] = {}
@@ -250,7 +258,11 @@ class GeminiLLMClient(LLMClient):
         for rate_attempt in range(5):
             await self._rate_limiter.acquire(estimated_tokens=est_tokens)
             try:
+<<<<<<< HEAD
                 config_kwargs: dict[str, Any] = {
+=======
+                config_kwargs = {
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
                     "system_instruction": sys_inst,
                     "response_mime_type": response_mime_type,
                 }

@@ -7,10 +7,14 @@ import {
   Zap,
   ArrowRight,
   Brain,
+<<<<<<< HEAD
   Sparkles,
   Scale,
   FileText,
   ShieldAlert,
+=======
+  Sparkles
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/theme-toggle";

@@ -12,15 +12,21 @@ import {
   UploadCloud,
   Search,
   Filter,
+<<<<<<< HEAD
   AlertTriangle,
   Download,
   BookOpen,
   History,
+=======
+  Clock,
+  AlertTriangle
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { RiskChip } from "@/components/ui/risk-chip";
 
+<<<<<<< HEAD
 function DocumentsContent() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab") === "kb" ? "kb" : "history";
@@ -28,6 +34,10 @@ function DocumentsContent() {
   const [searchTerm, setSearchTerm] = useState("");
   const [, startTransition] = useTransition();
 
+=======
+export default function DocumentsPage() {
+  const [searchTerm, setSearchTerm] = useState("");
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
   const { data, isLoading, isError } = useDocuments(1, 50);
   const deleteMutation = useDeleteDocument();
 

@@ -58,7 +58,11 @@ def create_sample_scanned_pdf() -> bytes:
 async def test_auth_registration_and_login_flow(client: AsyncClient):
     """Verify registration, login, token refresh, and me endpoints."""
     unique_email = f"user_{uuid.uuid4().hex[:8]}@example.com"
+<<<<<<< HEAD
     password = "mock_test_password_123!"
+=======
+    password = "SecurePassword123!"
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
 
     # 1. Register
     reg_resp = await client.post(
@@ -119,11 +123,19 @@ async def test_document_upload_validation_and_rejections(client: AsyncClient):
     email = f"uploader_{uuid.uuid4().hex[:8]}@example.com"
     await client.post(
         "/api/v1/auth/register",
+<<<<<<< HEAD
         json={"email": email, "password": "mock_test_pass_123!", "full_name": "Uploader"},
     )
     login_res = await client.post(
         "/api/v1/auth/login",
         json={"email": email, "password": "mock_test_pass_123!"},
+=======
+        json={"email": email, "password": "Password123!", "full_name": "Uploader"},
+    )
+    login_res = await client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": "Password123!"},
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
     )
     token = login_res.json()["data"]["access_token"]
     auth_header = {"Authorization": f"Bearer {token}"}
@@ -179,11 +191,19 @@ async def test_end_to_end_pipeline_and_exports(client: AsyncClient):
     email = f"e2e_{uuid.uuid4().hex[:8]}@example.com"
     await client.post(
         "/api/v1/auth/register",
+<<<<<<< HEAD
         json={"email": email, "password": "mock_test_pass_123!", "full_name": "E2E User"},
     )
     login_res = await client.post(
         "/api/v1/auth/login",
         json={"email": email, "password": "mock_test_pass_123!"},
+=======
+        json={"email": email, "password": "Password123!", "full_name": "E2E User"},
+    )
+    login_res = await client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": "Password123!"},
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
     )
     token = login_res.json()["data"]["access_token"]
     auth_header = {"Authorization": f"Bearer {token}"}
@@ -287,11 +307,19 @@ async def test_per_user_data_isolation(client: AsyncClient):
     user_a_email = f"usera_{uuid.uuid4().hex[:8]}@example.com"
     await client.post(
         "/api/v1/auth/register",
+<<<<<<< HEAD
         json={"email": user_a_email, "password": "mock_test_pass_123!", "full_name": "User A"},
     )
     login_a = await client.post(
         "/api/v1/auth/login",
         json={"email": user_a_email, "password": "mock_test_pass_123!"},
+=======
+        json={"email": user_a_email, "password": "Password123!", "full_name": "User A"},
+    )
+    login_a = await client.post(
+        "/api/v1/auth/login",
+        json={"email": user_a_email, "password": "Password123!"},
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
     )
     token_a = login_a.json()["data"]["access_token"]
 
@@ -308,11 +336,19 @@ async def test_per_user_data_isolation(client: AsyncClient):
     user_b_email = f"userb_{uuid.uuid4().hex[:8]}@example.com"
     await client.post(
         "/api/v1/auth/register",
+<<<<<<< HEAD
         json={"email": user_b_email, "password": "mock_test_pass_123!", "full_name": "User B"},
     )
     login_b = await client.post(
         "/api/v1/auth/login",
         json={"email": user_b_email, "password": "mock_test_pass_123!"},
+=======
+        json={"email": user_b_email, "password": "Password123!", "full_name": "User B"},
+    )
+    login_b = await client.post(
+        "/api/v1/auth/login",
+        json={"email": user_b_email, "password": "Password123!"},
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
     )
     token_b = login_b.json()["data"]["access_token"]
     header_b = {"Authorization": f"Bearer {token_b}"}
@@ -353,11 +389,19 @@ async def test_delete_my_data_gdpr_compliance(client: AsyncClient):
     email = f"gdpr_{uuid.uuid4().hex[:8]}@example.com"
     await client.post(
         "/api/v1/auth/register",
+<<<<<<< HEAD
         json={"email": email, "password": "mock_test_pass_123!", "full_name": "GDPR User"},
     )
     login_res = await client.post(
         "/api/v1/auth/login",
         json={"email": email, "password": "mock_test_pass_123!"},
+=======
+        json={"email": email, "password": "Password123!", "full_name": "GDPR User"},
+    )
+    login_res = await client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": "Password123!"},
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
     )
     token = login_res.json()["data"]["access_token"]
     header = {"Authorization": f"Bearer {token}"}
@@ -382,6 +426,10 @@ async def test_delete_my_data_gdpr_compliance(client: AsyncClient):
     # Re-registering the same email is allowed now that data is purged
     re_reg = await client.post(
         "/api/v1/auth/register",
+<<<<<<< HEAD
         json={"email": email, "password": "mock_test_pass_123!", "full_name": "Recreated User"},
+=======
+        json={"email": email, "password": "Password123!", "full_name": "Recreated User"},
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
     )
     assert re_reg.status_code == 201

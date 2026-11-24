@@ -526,7 +526,11 @@ async def evaluate_phase_5() -> dict[str, Any]:
     async with AsyncClient(transport=transport, base_url="http://test", follow_redirects=True) as client:
         # 1. Auth Flow
         user_a_email = f"eval_user_a_{uuid.uuid4().hex[:6]}@example.com"
+<<<<<<< HEAD
         password = "mock_test_password_123!"
+=======
+        password = "SecurePassword123!"
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
 
         reg_resp = await client.post(
             "/api/v1/auth/register",

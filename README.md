@@ -5,6 +5,7 @@
 
 *Transforming complex legal contracts, Terms of Service, and privacy policies into clear, plain-English simplifications with clause-level risk ratings, evidence grounding, and balanced rewrites.*
 
+<<<<<<< HEAD
 </div>
 
 ---
@@ -30,6 +31,45 @@ The **Legal & Policy Document Simplifier** is a production-grade, enterprise por
 | **Zero-Text Privacy Logging Audit** | $100.0\%$ | **100.0% Pass** (Zero text leaks) | 🔒 **PRIVATE** |
 | **Held-Out Test Set Integrity** (Reserved for Phase 7) | 31 clauses | **31 / 31 clauses preserved** | 🔒 **UNTOUCHED** |
 
+=======
+[![CI/CD Status](https://img.shields.io/badge/CI%2FCD-passing-brightgreen?style=for-the-badge&logo=github-actions&logoColor=white)](https://github.com)
+[![Python Version](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Next.js](https://img.shields.io/badge/Next.js-16.3-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%20%2B%20pgvector-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
+[![Google Gemini](https://img.shields.io/badge/Google%20Gemini-3.5%20Flash--Lite-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
+<br/>
+
+[Overview](#-executive-summary--key-metrics) • [Architecture](#-system-architecture) • [Core Innovations](#-core-innovations--guardrails) • [Technical Deep-Dives](#-technical-specifications--deep-dives) • [Evaluation Benchmarks](#-evaluation-framework--benchmark-results) • [Quickstart](#-quickstart--deployment)
+
+</div>
+
+---
+
+## 🌟 Executive Summary & Key Metrics
+
+The **Legal & Policy Document Simplifier** is a production-grade, enterprise portfolio platform designed to demystify complex legal contracts, Terms of Service, NDAs, and privacy policies. Rather than summarizing documents as arbitrary blobs of text, the system strictly decomposes contracts at the **clause level**, benchmarks every clause against a curated knowledge base of 200 standard commercial provisions via **Retrieval-Augmented Generation (RAG)**, and computes objective risk ratings with verifiable citations.
+
+### 📊 Benchmark Performance Matrix
+
+| Metric Category | Target Gate | Achieved Benchmark | Status |
+| :--- | :---: | :---: | :---: |
+| **High-Risk Clause Recall** (`HIGH` + `CRITICAL`) | $\ge 85.0\%$ | **93.3%** (28 / 30) | 🟢 **PASS** |
+| **Risk Classification Within-One-Level Accuracy** | $\ge 90.0\%$ | **100.0%** (70 / 70) | 🟢 **PASS** |
+| **Evidence Grounding Precision** (Verbatim Citation) | $\ge 90.0\%$ | **96.4%** | 🟢 **PASS** |
+| **Structured Output Schema Validity** (Pydantic / JSON) | $100.0\%$ | **100.0%** (0 syntax errors) | 🟢 **PASS** |
+| **Adversarial Prompt Injection Defense** | $100.0\%$ | **100.0% Defense** (0 leaks) | 🛡️ **SECURE** |
+| **Clause Boundary Segmentation** ($F_1$ Score) | $\ge 0.85$ | **0.9412** ($F_1$) | ⚡ **OPTIMAL** |
+| **Ingestion & Extraction Speed** | $< 50$ ms | **3.27 ms / doc** | ⚡ **FAST** |
+| **Retrieval Quality** (Recall@5 / MRR) | $\ge 0.80$ / $\ge 0.70$ | **0.8286** / **0.8286** | 🟢 **PASS** |
+| **Out-of-Domain Retrieval Rejection** | $100.0\%$ | **100.0% Rejection** | 🟢 **PASS** |
+| **Readability Improvement** (Flesch-Kincaid Grade) | $\le \text{Grade } 10$ | **Grade 4.3** (Ease: **80.3 / 100**) | 📖 **CLEAR** |
+| **Zero-Text Privacy Logging Audit** | $100.0\%$ | **100.0% Pass** (Zero text leaks) | 🔒 **PRIVATE** |
+| **Held-Out Test Set Integrity** (Reserved for Phase 7) | 31 clauses | **31 / 31 clauses preserved** | 🔒 **UNTOUCHED** |
+
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
 ---
 
 ## 💡 Core Innovations & Guardrails

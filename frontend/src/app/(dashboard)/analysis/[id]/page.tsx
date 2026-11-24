@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useDocument } from "@/hooks/use-documents";
 import { useDocumentSummary, useClauseAnalyses } from "@/hooks/use-analysis";
 import { StatusBadge } from "@/components/documents/status-badge";
+<<<<<<< HEAD
 import {
   ArrowLeft,
   Loader2,
@@ -12,6 +13,10 @@ import {
   Clock,
   FileText,
 } from "lucide-react";
+=======
+
+import { ArrowLeft, Loader2, AlertCircle, Sparkles, FileText, Clock } from "lucide-react";
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
 import { AnalysisSummary } from "@/components/analysis/analysis-summary";
 import { ClauseDetailPanel } from "@/components/analysis/clause-detail-panel";
 import { DocumentViewer } from "@/components/pdf-viewer/viewer";
@@ -134,6 +139,22 @@ export default function AnalysisPage({
             The Google Gemini API quota for this tier is temporarily exhausted. The document state is safely preserved and will automatically resume.
           </p>
         </div>
+      ) : document.status === "waiting for quota" ? (
+        <div className="flex-1 flex flex-col items-center justify-center border border-amber-500/30 rounded-3xl bg-amber-950/15 p-12 text-center shadow-2xl">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-6 text-amber-400 shadow-lg shadow-amber-500/10">
+            <Clock className="w-8 h-8 animate-pulse" />
+          </div>
+          <h2 className="text-xl font-bold font-heading text-slate-100 mb-2">
+            Waiting for Daily Gemini Quota Reset
+          </h2>
+          <p className="text-xs text-amber-200/80 max-w-lg leading-relaxed mb-4">
+            {(document.metadata as Record<string, string> | undefined)?.quota_notice ||
+              "Daily Gemini API request quota reached for this model tier. The analysis job is safely paused and will resume automatically when Google's quota resets at 00:00 UTC."}
+          </p>
+          <div className="text-[11px] font-mono text-slate-400 bg-slate-900/80 px-4 py-2 rounded-xl border border-slate-800">
+            All completed clauses are saved in database checkpoint. No progress will be lost.
+          </div>
+        </div>
       ) : document.status === "failed" ? (
         <div className="p-12 text-center rounded-[18px] border border-[var(--risk-high-border)] bg-[var(--card)] flex flex-col items-center justify-center min-h-[350px]">
           <div className="w-12 h-12 rounded-[14px] bg-[var(--risk-high-bg)] flex items-center justify-center mb-4 text-[var(--risk-high-text)]">
@@ -153,6 +174,7 @@ export default function AnalysisPage({
           </Link>
         </div>
       ) : (
+<<<<<<< HEAD
         <div className="space-y-6 flex-1 flex flex-col">
           {/* Top Overall Risk Summary & Risk Count Chips */}
           {summaryLoading ? (
@@ -160,6 +182,21 @@ export default function AnalysisPage({
           ) : summary ? (
             <AnalysisSummary analysis={summary} documentId={id} />
           ) : null}
+=======
+        <div className="flex-1 flex overflow-hidden border border-slate-800 rounded-3xl shadow-2xl bg-slate-900/90">
+          {/* Left Panel: Executive Summary & Clause Breakdown Cards */}
+          <div className="w-1/2 flex flex-col border-r border-slate-800 bg-slate-950/60 overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-6 space-y-8">
+              {summaryLoading ? (
+                <div className="space-y-4 animate-pulse">
+                  <div className="h-36 bg-slate-900 rounded-2xl border border-slate-800 w-full" />
+                </div>
+              ) : summary ? (
+                <div>
+                  <AnalysisSummary analysis={summary} documentId={id} />
+                </div>
+              ) : null}
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
 
           {/* Two-Column Workspace: Viewer (Left) + Detail Panel (Right) */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-start min-h-[600px]">

@@ -138,8 +138,13 @@ def create_corrupt_test_files():
     doc_enc.save(
         str(CORRUPT_DIR / "encrypted_file.pdf"),
         encryption=fitz.PDF_ENCRYPT_AES_256,
+<<<<<<< HEAD
         user_pw="mock_test_password_123",
         owner_pw="mock_test_owner_123",
+=======
+        user_pw="secret123",
+        owner_pw="owner123",
+>>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
     )
     doc_enc.close()
     print(f"Generated corrupt/scanned test suite in {CORRUPT_DIR}")
