@@ -13,6 +13,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class RiskCategory(StrEnum):
     """Risk classification categories."""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
     STANDARD = "standard"
     SLIGHTLY_UNUSUAL = "slightly_unusual"
     ONE_SIDED = "one_sided"
@@ -22,6 +27,7 @@ class RiskCategory(StrEnum):
 
 class RetrievedClause(BaseModel):
     """A reference clause retrieved from the knowledge base."""
+
     clause_id: str
     title: str | None = None
     content: str
@@ -36,6 +42,7 @@ from app.schemas.clause import ClauseResponse
 
 class ClauseAnalysisResponse(BaseModel):
     """Full analysis result for a single clause."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -55,6 +62,7 @@ class ClauseAnalysisResponse(BaseModel):
 
 class RiskDistribution(BaseModel):
     """Count of clauses per risk category."""
+
     standard: int = 0
     slightly_unusual: int = 0
     one_sided: int = 0
@@ -64,6 +72,7 @@ class RiskDistribution(BaseModel):
 
 class DocumentAnalysisResponse(BaseModel):
     """Document-level aggregate analysis."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -78,6 +87,7 @@ class DocumentAnalysisResponse(BaseModel):
 
 class AnalysisStatusResponse(BaseModel):
     """Real-time analysis progress status."""
+
     document_id: UUID
     status: str
     progress: float = Field(..., ge=0.0, le=1.0, description="Progress 0.0 to 1.0")

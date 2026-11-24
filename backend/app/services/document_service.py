@@ -14,7 +14,7 @@ from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.core.exceptions import FileUploadError, NotFoundError, AuthorizationError
+from app.core.exceptions import FileUploadError, NotFoundError, ValidationError
 from app.core.logging import get_logger
 from app.models.document import Document
 from app.repositories.document_repo import DocumentRepository
@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 # Allowed MIME types mapped to file extensions
-MIME_TYPE_MAP: dict[str, str] = {
+MIME_TYPE_MAP: dict[str, str | None] = {
     "application/pdf": ".pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
     "text/plain": ".txt",
@@ -46,7 +46,7 @@ def sanitize_filename(filename: str) -> str:
     # Limit length
     if len(name) > 200:
         base, ext = os.path.splitext(name)
-        name = base[:200 - len(ext)] + ext
+        name = base[: 200 - len(ext)] + ext
     return name or "unnamed_document"
 
 
@@ -66,9 +66,9 @@ def validate_file_extension(filename: str) -> str:
     return ext
 
 
-from app.document_processing import extract_document, DocumentSegmenter
-from app.models.clause import Clause
+from app.document_processing import DocumentSegmenter
 from app.repositories.clause_repo import ClauseRepository
+
 
 class DocumentService:
     """Handles document upload, storage, and management."""
@@ -107,12 +107,38 @@ class DocumentService:
 
         # Validate file size
         if file_size == 0:
-            raise FileUploadError("Uploaded file is empty.")
+            raise ValidationError("Uploaded file is empty.")
         if file_size > settings.max_file_size_bytes:
             raise FileUploadError(
                 f"File size ({file_size / 1024 / 1024:.1f} MB) exceeds "
                 f"the maximum allowed size ({settings.max_file_size_mb} MB)."
             )
+
+        # PDF magic bytes & scan inspection
+        if ext == ".pdf":
+            if not content.startswith(b"%PDF-"):
+                raise ValidationError("Invalid PDF format: file lacks %PDF header signature.")
+            try:
+                import fitz
+
+                from app.document_processing.extractor import is_scanned_pdf
+
+                doc = fitz.open(stream=content, filetype="pdf")
+                if doc.needs_pass or doc.is_encrypted:
+                    doc.close()
+                    raise ValidationError("Password-protected or encrypted PDF files are not supported.")
+                if doc.page_count == 0:
+                    doc.close()
+                    raise ValidationError("Uploaded PDF contains zero pages.")
+                if is_scanned_pdf(doc):
+                    doc.close()
+                    raise ValidationError("Scanned PDFs are not supported in v1. Please upload a machine-readable, text-based PDF or document.")
+                doc.close()
+            except ValidationError:
+                raise
+            except Exception as e:
+                logger.warning("pdf_inspection_failed", error=str(e))
+                raise ValidationError(f"Invalid or corrupt PDF file: {e}")
 
         # Sanitize and generate unique filename
         safe_name = sanitize_filename(file.filename)
@@ -145,7 +171,7 @@ class DocumentService:
             is_scanned=False,
             metadata={},
         )
-        
+
         await self.session.commit()
 
         logger.info(

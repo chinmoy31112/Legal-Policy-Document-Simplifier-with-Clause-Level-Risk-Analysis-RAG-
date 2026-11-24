@@ -6,7 +6,7 @@ import { useDocument } from "@/hooks/use-documents";
 import { useDocumentSummary, useClauseAnalyses } from "@/hooks/use-analysis";
 import { StatusBadge } from "@/components/documents/status-badge";
 
-import { ArrowLeft, Loader2, AlertCircle, ShieldCheck, Sparkles, FileText } from "lucide-react";
+import { ArrowLeft, Loader2, AlertCircle, Sparkles, FileText, Clock } from "lucide-react";
 import { AnalysisSummary } from "@/components/analysis/analysis-summary";
 import { ClauseCard } from "@/components/analysis/clause-card";
 import { DocumentViewer } from "@/components/pdf-viewer/viewer";
@@ -102,6 +102,22 @@ export default function AnalysisPage({ params }: { params: Promise<{ id: string 
             Our pipeline is extracting clause text, retrieving reference standards, and generating structured Gemini 3.5 risk models. Results will load automatically.
           </p>
         </div>
+      ) : document.status === "waiting for quota" ? (
+        <div className="flex-1 flex flex-col items-center justify-center border border-amber-500/30 rounded-3xl bg-amber-950/15 p-12 text-center shadow-2xl">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-6 text-amber-400 shadow-lg shadow-amber-500/10">
+            <Clock className="w-8 h-8 animate-pulse" />
+          </div>
+          <h2 className="text-xl font-bold font-heading text-slate-100 mb-2">
+            Waiting for Daily Gemini Quota Reset
+          </h2>
+          <p className="text-xs text-amber-200/80 max-w-lg leading-relaxed mb-4">
+            {(document.metadata as Record<string, string> | undefined)?.quota_notice ||
+              "Daily Gemini API request quota reached for this model tier. The analysis job is safely paused and will resume automatically when Google's quota resets at 00:00 UTC."}
+          </p>
+          <div className="text-[11px] font-mono text-slate-400 bg-slate-900/80 px-4 py-2 rounded-xl border border-slate-800">
+            All completed clauses are saved in database checkpoint. No progress will be lost.
+          </div>
+        </div>
       ) : document.status === "failed" ? (
         <div className="flex-1 flex items-center justify-center border border-red-500/30 rounded-3xl bg-red-950/10 p-12 text-center">
           <div className="max-w-md">
@@ -129,7 +145,7 @@ export default function AnalysisPage({ params }: { params: Promise<{ id: string 
                 </div>
               ) : summary ? (
                 <div>
-                  <AnalysisSummary analysis={summary} />
+                  <AnalysisSummary analysis={summary} documentId={id} />
                 </div>
               ) : null}
 

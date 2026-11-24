@@ -4,10 +4,11 @@ Base repository with generic async CRUD operations.
 Provides a reusable base class for all data access repositories.
 """
 
-from typing import Any, Generic, Sequence, Type, TypeVar
+from collections.abc import Sequence
+from typing import Any, Generic, TypeVar
 from uuid import UUID
 
-from sqlalchemy import func, select, delete as sa_delete
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import Base
@@ -18,7 +19,7 @@ ModelT = TypeVar("ModelT", bound=Base)
 class BaseRepository(Generic[ModelT]):
     """Generic async CRUD repository."""
 
-    def __init__(self, model: Type[ModelT], session: AsyncSession):
+    def __init__(self, model: type[ModelT], session: AsyncSession):
         self.model = model
         self.session = session
 
@@ -51,8 +52,12 @@ class BaseRepository(Generic[ModelT]):
         total = total_result.scalar() or 0
 
         # Get paginated items
-        query = query.offset(offset).limit(limit).order_by(
-            self.model.created_at.desc()
+        query = (
+            query.offset(offset)
+            .limit(limit)
+            .order_by(
+                self.model.created_at.desc()  # type: ignore[attr-defined]
+            )
         )
         result = await self.session.execute(query)
         items = result.scalars().all()

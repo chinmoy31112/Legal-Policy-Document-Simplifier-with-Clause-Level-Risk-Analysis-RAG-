@@ -13,15 +13,12 @@ import {
   Search,
   Filter,
   Clock,
-  ShieldCheck,
-  Zap,
   AlertTriangle
 } from "lucide-react";
 
 export default function DocumentsPage() {
-  const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
-  const { data, isLoading, isError } = useDocuments(page, 20);
+  const { data, isLoading, isError } = useDocuments(1, 50);
   const deleteMutation = useDeleteDocument();
 
   const documents = data?.items || [];

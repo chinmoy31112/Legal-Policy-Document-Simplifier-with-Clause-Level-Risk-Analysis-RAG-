@@ -1,9 +1,9 @@
 version: "3.9"
 
 services:
-  # ── PostgreSQL ─────────────────────────────────────────────────────
+  # ── PostgreSQL with pgvector (ADR 001) ─────────────────────────────────────
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: legal_simplifier_db
     environment:
       POSTGRES_DB: legal_simplifier
@@ -15,11 +15,25 @@ services:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d legal_simplifier"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 5
 
-  # ── Backend (FastAPI) ──────────────────────────────────────────────
+  # ── Redis for ARQ Job Queue (ADR 002) ──────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: legal_simplifier_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── Backend API (FastAPI) ──────────────────────────────────────────────────
   backend:
     build:
       context: ./backend
@@ -29,18 +43,48 @@ services:
       - ./backend/.env
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/legal_simplifier
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: development
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
       - backend_uploads:/app/uploads
-      - backend_chroma:/app/chroma_data
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import httpx; r = httpx.get('http://localhost:8000/health/live'); exit(0 if r.status_code == 200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-  # ── Frontend (Next.js) ────────────────────────────────────────────
+  # ── Background Worker (ARQ) ────────────────────────────────────────────────
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: legal_simplifier_worker
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/legal_simplifier
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: development
+    volumes:
+      - ./backend:/app
+      - backend_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python -m app.workers.main
+
+  # ── Frontend (Next.js 15) ──────────────────────────────────────────────────
   frontend:
     build:
       context: ./frontend
@@ -55,10 +99,11 @@ services:
       - /app/node_modules
       - /app/.next
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     command: npm run dev
 
 volumes:
   postgres_data:
+  redis_data:
   backend_uploads:
-  backend_chroma:

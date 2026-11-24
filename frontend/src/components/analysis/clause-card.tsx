@@ -119,7 +119,7 @@ export function ClauseCard({
                 <CheckCircle2 className="w-3.5 h-3.5" /> Suggested Balanced Rewrite
               </h4>
               <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 italic font-medium leading-relaxed">
-                "{clause.suggested_rewrite}"
+                &ldquo;{clause.suggested_rewrite}&rdquo;
               </div>
             </div>
           )}
@@ -131,7 +131,7 @@ export function ClauseCard({
                 <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> RAG Knowledge Base Benchmark Matches
               </h4>
               <div className="space-y-2">
-                {retrievedClauses.map((ref: any, i: number) => (
+                {retrievedClauses.map((ref: { text?: string; content?: string; similarity?: number }, i: number) => (
                   <div key={i} className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl text-[11px] text-slate-300 flex justify-between gap-3">
                     <span className="line-clamp-2">{ref.text || ref.content}</span>
                     {ref.similarity && (

@@ -7,7 +7,7 @@ Represents registered users with authentication credentials.
 from sqlalchemy import Boolean, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.database import Base, UUIDMixin, TimestampMixin
+from app.core.database import Base, TimestampMixin, UUIDMixin
 
 
 class User(Base, UUIDMixin, TimestampMixin):
@@ -15,16 +15,25 @@ class User(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "users"
 
-    email: Mapped[str] = mapped_column(
-        String(320), unique=True, index=True, nullable=False
-    )
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(128), nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 
     # Relationships
-    documents = relationship("Document", back_populates="user", lazy="selectin")
-    audit_logs = relationship("AuditLog", back_populates="user", lazy="selectin")
+    documents = relationship(
+        "Document",
+        back_populates="user",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    audit_logs = relationship(
+        "AuditLog",
+        back_populates="user",
+        lazy="selectin",
+        passive_deletes=True,
+    )
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email={self.email})>"

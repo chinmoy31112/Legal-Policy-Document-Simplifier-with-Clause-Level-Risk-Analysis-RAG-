@@ -35,6 +35,8 @@ out/
 Thumbs.db
 
 # Uploads & Storage
+uploads/*
+!uploads/.gitkeep
 backend/uploads/*
 !backend/uploads/.gitkeep
 
@@ -46,11 +48,14 @@ chroma_data/
 # Docker
 *.log
 
-# Testing
+# Testing & Lint Caches
 .coverage
 htmlcov/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 coverage/
+scratch/
 
 # Build
 *.pyc

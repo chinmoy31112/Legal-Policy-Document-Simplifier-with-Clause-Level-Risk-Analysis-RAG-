@@ -8,7 +8,7 @@ from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.database import Base, UUIDMixin, TimestampMixin
+from app.core.database import Base, TimestampMixin, UUIDMixin
 
 
 class Clause(Base, UUIDMixin, TimestampMixin):
@@ -17,8 +17,10 @@ class Clause(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "clauses"
 
     document_id: Mapped["UUID"] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"),
-        nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     clause_index: Mapped[int] = mapped_column(Integer, nullable=False)
     clause_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -34,8 +36,7 @@ class Clause(Base, UUIDMixin, TimestampMixin):
     # Relationships
     document = relationship("Document", back_populates="clauses")
     analysis_result = relationship(
-        "AnalysisResult", back_populates="clause", uselist=False,
-        cascade="all, delete-orphan"
+        "AnalysisResult", back_populates="clause", uselist=False, cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

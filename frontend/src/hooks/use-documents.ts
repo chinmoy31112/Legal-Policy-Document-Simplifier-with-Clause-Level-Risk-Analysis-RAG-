@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import type { Document, DocumentType, DocumentStatus } from '@/types/document';
+import type { Document, DocumentType } from '@/types/document';
 import { PaginatedResponse, APIResponse } from '@/types/api';
 
 export function useDocuments(page = 1, pageSize = 10) {
@@ -60,8 +60,14 @@ export function useUploadDocument() {
         formData.append('jurisdiction', jurisdiction);
       }
 
-      const response = await apiClient.post<APIResponse<Document>>('/documents/upload', formData);
-      return response.data.data;
+      try {
+        const response = await apiClient.post<APIResponse<Document>>('/documents/upload', formData);
+        return response.data.data;
+      } catch (err: unknown) {
+        const axiosErr = err as { response?: { data?: { detail?: string; message?: string } }; message?: string };
+        const detail = axiosErr?.response?.data?.detail || axiosErr?.response?.data?.message || axiosErr?.message || "Failed to upload document.";
+        throw new Error(detail);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });

@@ -2,7 +2,7 @@
 Analysis repositories for data access to AnalysisResult and DocumentAnalysis models.
 """
 
-from typing import Sequence
+from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import select
@@ -23,7 +23,7 @@ class AnalysisResultRepository(BaseRepository[AnalysisResult]):
         """Get all clause analysis results for a document."""
         # Using a join with Clause to filter by document_id
         from app.models.clause import Clause
-        
+
         query = (
             select(AnalysisResult)
             .options(selectinload(AnalysisResult.clause))

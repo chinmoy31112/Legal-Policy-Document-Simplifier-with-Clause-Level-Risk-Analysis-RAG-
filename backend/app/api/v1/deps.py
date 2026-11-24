@@ -7,11 +7,11 @@ Authentication dependencies, pagination, and common query parameters.
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, Header, Query
+from fastapi import Header, Query
 from jose import JWTError
 
-from app.core.security import decode_token
 from app.core.exceptions import AuthenticationError
+from app.core.security import decode_token
 from app.schemas.common import PaginationParams
 
 

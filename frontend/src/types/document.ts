@@ -19,7 +19,8 @@ export type DocumentStatus =
   | "embedding"
   | "analyzing"
   | "completed"
-  | "failed";
+  | "failed"
+  | "waiting for quota";
 
 export interface Document {
   id: string;
@@ -85,4 +86,5 @@ export const STATUS_LABELS: Record<DocumentStatus, string> = {
   analyzing: "Analyzing",
   completed: "Completed",
   failed: "Failed",
+  "waiting for quota": "Waiting for Quota",
 };

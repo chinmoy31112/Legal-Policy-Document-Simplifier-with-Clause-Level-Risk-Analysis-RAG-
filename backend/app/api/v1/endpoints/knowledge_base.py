@@ -10,14 +10,14 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.deps import get_current_user_id, get_pagination
+from app.dependencies import get_db_session
+from app.schemas.common import APIResponse, PaginatedResponse, PaginationParams
 from app.schemas.knowledge_base import (
     KBClauseResponse,
     KBDocumentResponse,
     KBIngestionResponse,
 )
-from app.schemas.common import APIResponse, PaginatedResponse, PaginationParams
-from app.api.v1.deps import get_current_user_id, get_pagination
-from app.dependencies import get_db_session
 from app.services.knowledge_base_service import KnowledgeBaseService
 
 router = APIRouter()
@@ -39,11 +39,11 @@ async def list_kb_documents(
     items, total = await service.get_all_documents(
         offset=pagination.offset, limit=pagination.page_size
     )
-    
+
     # Calculate clause count for response if it were loaded, but currently it's not.
     # To avoid N+1 queries, we could update the repo, but for now we return 0 or rely on a property.
     response_items = [KBDocumentResponse.model_validate(doc) for doc in items]
-    
+
     paginated = PaginatedResponse.create(
         items=response_items,
         total=total,

@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { ClauseAnalysis } from "@/types/analysis";
 import { Document } from "@/types/document";
-import { Search, ZoomIn, ZoomOut, FileText, Lock, Sparkles } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Search, Sparkles, FileText } from "lucide-react";
 
 export function DocumentViewer({
   document,

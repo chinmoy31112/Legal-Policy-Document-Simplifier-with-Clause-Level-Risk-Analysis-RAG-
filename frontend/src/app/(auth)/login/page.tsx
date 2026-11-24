@@ -1,16 +1,14 @@
 "use client";
 
-/**
- * Login page.
- */
-
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Shield, Mail, Lock, Loader2, Eye, EyeOff } from "lucide-react";
+import { Shield, Mail, Lock, Loader2, Eye, EyeOff, Scale } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 
 export default function LoginPage() {
+  const router = useRouter();
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,96 +22,98 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       await login({ email, password });
-      window.location.href = "/dashboard";
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      router.push("/dashboard");
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: string; message?: string } }; message?: string };
+      const detail = axiosErr?.response?.data?.detail || axiosErr?.response?.data?.message || axiosErr?.message || "Invalid credentials or login failed.";
+      setError(detail);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 relative bg-[#f8faf3]">
-      {/* Background Soft Glows */}
+    <div className="min-h-screen flex items-center justify-center p-6 relative bg-[#070a11] text-slate-100 select-none">
+      {/* Background Ambient Glows */}
       <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[20%] w-[500px] h-[500px] rounded-full bg-[#d9e7cd]/35 blur-[130px]" />
-        <div className="absolute bottom-[-10%] right-[20%] w-[450px] h-[450px] rounded-full bg-[#fed7d2]/30 blur-[130px]" />
+        <div className="absolute top-[-10%] left-[20%] w-[500px] h-[500px] rounded-full bg-emerald-500/10 blur-[150px]" />
+        <div className="absolute bottom-[-10%] right-[20%] w-[450px] h-[450px] rounded-full bg-indigo-500/10 blur-[150px]" />
       </div>
 
       <motion.div
-        initial={{ opacity: 0, y: 30 }}
+        initial={{ opacity: 0, y: 25 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="w-full max-w-md"
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-md space-y-6"
       >
         {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-11 h-11 rounded-2xl bg-[#55624d] flex items-center justify-center shadow-ambient">
-            <Shield className="w-5 h-5 text-white" />
+        <div className="flex items-center justify-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 text-slate-950 font-bold">
+            <Shield className="w-6 h-6 text-slate-950" />
           </div>
-          <span className="text-xl font-bold font-display tracking-tight text-[#191c18]">
-            Legal<span className="text-[#55624d]">Sanctuary</span>
-          </span>
+          <div>
+            <div className="text-xl font-extrabold font-heading tracking-tight text-white flex items-center gap-1.5">
+              GovLegal <span className="text-emerald-400">AI</span>
+            </div>
+            <div className="text-[10px] font-bold tracking-widest text-emerald-400/90 uppercase">
+              Policy & Contract Intelligence
+            </div>
+          </div>
         </div>
 
         {/* Card */}
-        <div className="rounded-3xl bg-white shadow-ambient-lg p-9 border border-white/80">
-          <h2 className="text-2xl font-bold font-display text-center mb-2 text-[#191c18]">Welcome Back</h2>
-          <p className="text-sm text-[#74796e] text-center mb-8">
-            Sign in to your document sanctuary
-          </p>
+        <div className="rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl p-8 lg:p-9 space-y-6">
+          <div className="text-center space-y-1">
+            <h2 className="text-2xl font-bold font-heading text-slate-100">Welcome Back</h2>
+            <p className="text-xs text-slate-400">
+              Sign in to your legal analysis workspace
+            </p>
+          </div>
 
           {error && (
-            <div className="mb-6 p-4 rounded-2xl bg-[#fed7d2]/50 text-sm text-[#755754] font-medium">
+            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email */}
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-semibold text-[#444841] mb-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#74796e]" />
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder="officer@example.com"
                   required
-                  className="w-full pl-11 pr-4 py-3 rounded-2xl bg-[#f2f4ed] text-sm text-[#191c18] placeholder:text-[#74796e] focus:bg-[#d9e7cd] focus:outline-none transition-all duration-400"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none transition-all"
                 />
               </div>
             </div>
 
-            {/* Password */}
             <div>
-              <label className="block text-sm font-semibold text-[#444841] mb-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#74796e]" />
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder="••••••••••••"
                   required
-                  minLength={8}
-                  className="w-full pl-11 pr-11 py-3 rounded-2xl bg-[#f2f4ed] text-sm text-[#191c18] placeholder:text-[#74796e] focus:bg-[#d9e7cd] focus:outline-none transition-all duration-400"
+                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
                 >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4 text-[#74796e]" />
-                  ) : (
-                    <Eye className="w-4 h-4 text-[#74796e]" />
-                  )}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
@@ -121,31 +121,33 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3.5 rounded-2xl text-sm font-semibold text-white bg-[#55624d] hover:bg-[#45513d] shadow-ambient transition-all duration-300 disabled:opacity-50"
+              className="w-full h-11 rounded-xl text-xs font-bold uppercase tracking-wider bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 hover:from-emerald-300 hover:to-teal-300 shadow-lg shadow-emerald-500/20 transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
             >
               {isLoading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-white" />
-                  Signing in...
-                </span>
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                  Authenticating...
+                </>
               ) : (
-                "Sign In"
+                "Sign In to Portal"
               )}
             </button>
           </form>
 
-          <p className="text-sm text-[#74796e] text-center mt-7">
+          <div className="pt-4 border-t border-slate-800 text-center text-xs text-slate-400">
             Don&apos;t have an account?{" "}
-            <Link
-              href="/register"
-              className="text-[#55624d] hover:underline font-semibold transition-colors"
-            >
-              Sign up free
+            <Link href="/register" className="text-emerald-400 hover:underline font-bold">
+              Register New Account
             </Link>
-          </p>
+          </div>
+        </div>
+
+        {/* Legal Disclaimer Notice */}
+        <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800 text-slate-400 text-[11px] flex items-center gap-2.5">
+          <Scale className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>Informational legal simplification only. Does not constitute formal legal advice.</span>
         </div>
       </motion.div>
     </div>
   );
 }
-

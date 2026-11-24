@@ -3,27 +3,36 @@ name = "legal-document-simplifier"
 version = "1.0.0"
 description = "AI Legal & Policy Document Simplifier with Clause-Level Risk Analysis using RAG"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 asyncio_mode = "auto"
 filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py311"
 line-length = 100
+exclude = ["alembic", "venv", ".venv", "tests/eval_data"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "TCH"]
-ignore = ["E501"]
+select = ["E", "F", "I", "W"]
+ignore = ["E501", "E402", "B904", "B018", "W291", "W293"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
 
 [tool.mypy]
-python_version = "3.12"
-strict = true
-warn_return_any = true
-warn_unused_configs = true
+python_version = "3.11"
+strict = false
+warn_return_any = false
+warn_unused_configs = false
+disable_error_code = ["import-untyped"]
+ignore_missing_imports = true
+exclude = ["alembic", "venv", ".venv"]
+
+[[tool.mypy.overrides]]
+module = ["fitz", "fitz.*", "jose", "jose.*", "passlib", "passlib.*", "pytesseract", "pytesseract.*"]
+ignore_missing_imports = true

@@ -10,16 +10,16 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.deps import get_current_user_id
+from app.dependencies import get_db_session
 from app.schemas.auth import (
-    UserRegister,
-    UserLogin,
-    TokenResponse,
     TokenRefresh,
+    TokenResponse,
+    UserLogin,
+    UserRegister,
     UserResponse,
 )
 from app.schemas.common import APIResponse
-from app.api.v1.deps import get_current_user_id
-from app.dependencies import get_db_session
 from app.services.auth_service import AuthService
 
 router = APIRouter()
@@ -95,3 +95,33 @@ async def get_profile(
     service = AuthService(session)
     user = await service.get_profile(user_id)
     return APIResponse(data=UserResponse.model_validate(user))
+
+
+@router.delete(
+    "/me",
+    summary="Delete user account (Delete-My-Data)",
+    description="Permanently delete user account and all uploaded documents, clauses, and analyses.",
+)
+async def delete_account(
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
+    """Delete user account and all data (GDPR compliance)."""
+    service = AuthService(session)
+    await service.delete_account(user_id)
+    return APIResponse(message="User account and all associated data have been permanently deleted.")
+
+
+@router.post(
+    "/delete-account",
+    summary="Delete user account alias",
+    description="Permanently delete the authenticated user account.",
+)
+async def delete_account_alias(
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
+    """Alias for delete user account."""
+    service = AuthService(session)
+    await service.delete_account(user_id)
+    return APIResponse(message="User account and all associated data have been permanently deleted.")

@@ -1,156 +1,152 @@
 """
-ChromaDB retrieval service.
+Retrieval Service coordinating Embedder and VectorStore.
 
-Manages the vector database for storing and retrieving legal clauses.
+Enforces Rule 1: Retrieval before reasoning, with explicit no_reference_found flag.
+Enforces Rule 8: Guardrails preventing dimension or model mismatch.
 """
 
-from typing import Any, Sequence
-import uuid
-import chromadb
-from chromadb.config import Settings as ChromaSettings
-from chromadb.api.models.Collection import Collection
+from typing import Any
 
-from app.config import get_settings
-from app.core.exceptions import AIServiceError
+from pydantic import BaseModel, Field
+
+from app.ai.embedding import GeminiEmbedder
+from app.ai.interfaces import Embedder, RetrievalResult, VectorRecord, VectorStore
+from app.ai.vector_store import get_vector_store
+from app.core.config import get_settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
 
+class RetrievalResponse(BaseModel):
+    """Encapsulates vector search results, similarity thresholding, and no_reference_found."""
+
+    query_text: str
+    results: list[RetrievalResult] = Field(default_factory=list)
+    no_reference_found: bool = False
+    best_score: float = 0.0
+    retrieved_count: int = 0
+    similarity_threshold: float = 0.70
+
+
 class RetrievalService:
-    """Service for managing vector storage and similarity search with ChromaDB."""
+    """
+    Coordinates embedding generation and vector similarity search.
+    Provides top-k search, category filtering, and threshold enforcement.
+    """
 
-    def __init__(self):
+    def __init__(
+        self,
+        embedder: Embedder | None = None,
+        vector_store: VectorStore | None = None,
+    ):
         self.settings = get_settings()
-        
-        # Configure ChromaDB client (Embedded mode)
-        # The user explicitly requested embedded mode for ChromaDB deployment.
-        self.client = chromadb.PersistentClient(path=str(self.settings.chroma_path))
-            
-        self.collection_name = self.settings.chroma_collection_name
-        self._collection = None
+        self.embedder = embedder or GeminiEmbedder()
+        self.vector_store = vector_store or get_vector_store()
 
-    @property
-    def collection(self) -> Collection:
-        """Get or create the ChromaDB collection."""
-        if self._collection is None:
-            # We don't provide an embedding function here because we'll compute
-            # embeddings explicitly using Google GenAI before inserting.
-            try:
-                self._collection = self.client.get_or_create_collection(
-                    name=self.collection_name,
-                    metadata={"hnsw:space": "cosine"} # Use cosine similarity
-                )
-                logger.info("chroma_collection_loaded", name=self.collection_name)
-            except Exception as e:
-                logger.error("chroma_collection_error", error=str(e))
-                raise AIServiceError(f"Failed to access ChromaDB collection: {e}")
-                
-        return self._collection
+    async def index_reference_clauses(
+        self,
+        clauses: list[dict[str, Any]],
+    ) -> int:
+        """
+        Embed and persist reference clauses with full metadata.
+        """
+        if not clauses:
+            return 0
 
-    async def index_clauses(
-        self, 
-        ids: Sequence[str], 
-        texts: Sequence[str], 
-        embeddings: Sequence[list[float]],
-        metadatas: Sequence[dict[str, Any]] | None = None
-    ) -> None:
-        """
-        Index a batch of clauses with their embeddings into ChromaDB.
-        
-        Args:
-            ids: List of unique string IDs (usually stringified UUIDs).
-            texts: List of the raw clause text.
-            embeddings: List of embedding vectors.
-            metadatas: Optional list of metadata dictionaries.
-        """
-        if not ids or len(ids) != len(texts) or len(ids) != len(embeddings):
-            raise ValueError("ids, texts, and embeddings must have the same length")
-            
-        if metadatas and len(metadatas) != len(ids):
-            raise ValueError("metadatas must have the same length as ids if provided")
-            
-        try:
-            # Ensure metadatas is the right shape even if None
-            final_metadatas = metadatas if metadatas is not None else [{} for _ in ids]
-            
-            # ChromaDB doesn't allow None values in metadata dicts
-            for meta in final_metadatas:
-                keys_to_delete = [k for k, v in meta.items() if v is None]
-                for k in keys_to_delete:
-                    del meta[k]
-                    
-            self.collection.upsert(
-                ids=list(ids),
-                documents=list(texts),
-                embeddings=list(embeddings),
-                metadatas=list(final_metadatas)
+        texts = [c["text"] for c in clauses]
+        vectors = await self.embedder.embed_texts(texts, task_type="RETRIEVAL_DOCUMENT")
+
+        records: list[VectorRecord] = []
+        for i, c in enumerate(clauses):
+            rec = VectorRecord(
+                id=c["id"],
+                vector=vectors[i],
+                model_name=self.embedder.model_name,
+                dimension=self.embedder.dimension,
+                metadata={
+                    "clause_id": c["id"],
+                    "title": c.get("title", ""),
+                    "category": c.get("category", "General"),
+                    "document_type": c.get("document_type", ""),
+                    "source_document": c.get("source", ""),
+                    "jurisdiction": c.get("jurisdiction", "General"),
+                    "version": c.get("version", "1.0.0"),
+                    "language": c.get("language", "en"),
+                    "why_standard_or_risky": c.get("why_standard_or_risky", ""),
+                    "text": c["text"],
+                },
             )
-            
-            logger.info("clauses_indexed", count=len(ids))
-        except Exception as e:
-            logger.error("chroma_index_error", error=str(e))
-            raise AIServiceError(f"Failed to index clauses in ChromaDB: {e}")
+            records.append(rec)
 
-    async def search(
-        self, 
-        query_embedding: list[float], 
+        await self.vector_store.add_vectors(records)
+        logger.info("indexed_reference_clauses", count=len(records))
+        return len(records)
+
+    async def retrieve(
+        self,
+        query_text: str,
         top_k: int | None = None,
-        where_filter: dict[str, Any] | None = None
-    ) -> list[dict[str, Any]]:
+        category: str | None = None,
+        min_similarity: float | None = None,
+        query_vector: list[float] | None = None,
+    ) -> RetrievalResponse:
         """
-        Search for similar clauses using a query embedding.
-        
-        Args:
-            query_embedding: The embedding vector of the search query.
-            top_k: Number of results to return.
-            where_filter: Optional ChromaDB where clause for metadata filtering.
-            
-        Returns:
-            List of dictionaries containing id, distance, text, and metadata.
-        """
-        try:
-            k = top_k or self.settings.retrieval_top_k
-            
-            # Execute query
-            results = self.collection.query(
-                query_embeddings=[query_embedding],
-                n_results=k,
-                where=where_filter,
-                include=["documents", "metadatas", "distances"]
-            )
-            
-            formatted_results = []
-            
-            # ChromaDB returns lists of lists because we can pass multiple query embeddings
-            # We only passed one, so we take the 0th element of each return list
-            if results["ids"] and len(results["ids"]) > 0:
-                for i in range(len(results["ids"][0])):
-                    formatted_results.append({
-                        "id": results["ids"][0][i],
-                        "distance": results["distances"][0][i] if "distances" in results and results["distances"] else 0.0,
-                        "similarity": 1.0 - (results["distances"][0][i] if "distances" in results and results["distances"] else 0.0), # Assuming cosine distance
-                        "text": results["documents"][0][i] if "documents" in results and results["documents"] else "",
-                        "metadata": results["metadatas"][0][i] if "metadatas" in results and results["metadatas"] else {}
-                    })
-                    
-            return formatted_results
-            
-        except Exception as e:
-            logger.error("chroma_search_error", error=str(e))
-            raise AIServiceError(f"Failed to search ChromaDB: {e}")
+        Retrieve standard or risky reference clauses matching the query clause text.
+        Reuses query_vector when provided to avoid duplicate embeddings (Rule: single embedding reused).
 
-    async def delete_document(self, document_id: str | uuid.UUID) -> None:
+        Enforces:
+        - Similarity threshold filtering.
+        - Sets no_reference_found = True if zero matches clear the threshold.
         """
-        Delete all clauses belonging to a specific document.
-        
-        This relies on the metadata containing 'kb_document_id'.
-        """
-        try:
-            self.collection.delete(
-                where={"kb_document_id": str(document_id)}
-            )
-            logger.info("chroma_document_deleted", document_id=str(document_id))
-        except Exception as e:
-            logger.error("chroma_delete_error", error=str(e), document_id=str(document_id))
-            raise AIServiceError(f"Failed to delete document from ChromaDB: {e}")
+        k = top_k or self.settings.retrieval_top_k
+        threshold = (
+            min_similarity
+            if min_similarity is not None
+            else self.settings.retrieval_similarity_threshold
+        )
+
+        filters: dict[str, Any] = {}
+        if category:
+            filters["category"] = category
+
+        # 1. Use provided query embedding or generate once from embedder
+        if query_vector is None:
+            query_vector = await self.embedder.embed_query(query_text)
+
+        # 2. Query VectorStore with model/dimension guardrail
+        raw_results = await self.vector_store.search(
+            query_vector=query_vector,
+            top_k=k,
+            filters=filters or None,
+            query_model_name=self.embedder.model_name,
+        )
+
+        # 3. Apply similarity threshold
+        filtered_results = [r for r in raw_results if r.score >= threshold]
+        best_score = (
+            filtered_results[0].score
+            if filtered_results
+            else (raw_results[0].score if raw_results else 0.0)
+        )
+
+        # Rule 1: Explicit flag when nothing clears the similarity threshold
+        no_ref_found = len(filtered_results) == 0
+
+        logger.debug(
+            "retrieval_completed",
+            raw_hits=len(raw_results),
+            filtered_hits=len(filtered_results),
+            no_reference_found=no_ref_found,
+            best_score=best_score,
+            threshold=threshold,
+        )
+
+        return RetrievalResponse(
+            query_text=query_text,
+            results=filtered_results,
+            no_reference_found=no_ref_found,
+            best_score=best_score,
+            retrieved_count=len(filtered_results),
+            similarity_threshold=threshold,
+        )

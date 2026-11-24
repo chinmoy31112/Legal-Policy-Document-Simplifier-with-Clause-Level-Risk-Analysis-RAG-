@@ -2,7 +2,7 @@
 Document repository — data access layer for Document model.
 """
 
-from typing import Sequence
+from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -28,9 +28,7 @@ class DocumentRepository(BaseRepository[Document]):
     ) -> tuple[Sequence[Document], int]:
         """Get paginated documents for a specific user with optional filters."""
         query = select(Document).where(Document.user_id == user_id)
-        count_query = select(func.count()).select_from(Document).where(
-            Document.user_id == user_id
-        )
+        count_query = select(func.count()).select_from(Document).where(Document.user_id == user_id)
 
         if status_filter:
             query = query.where(Document.status == status_filter)
@@ -43,17 +41,13 @@ class DocumentRepository(BaseRepository[Document]):
         total_result = await self.session.execute(count_query)
         total = total_result.scalar() or 0
 
-        query = query.offset(offset).limit(limit).order_by(
-            Document.created_at.desc()
-        )
+        query = query.offset(offset).limit(limit).order_by(Document.created_at.desc())
         result = await self.session.execute(query)
         items = result.scalars().all()
 
         return items, total
 
-    async def get_by_id_and_user(
-        self, document_id: UUID, user_id: UUID
-    ) -> Document | None:
+    async def get_by_id_and_user(self, document_id: UUID, user_id: UUID) -> Document | None:
         """Get a document by ID, scoped to a specific user."""
         query = select(Document).where(
             Document.id == document_id,

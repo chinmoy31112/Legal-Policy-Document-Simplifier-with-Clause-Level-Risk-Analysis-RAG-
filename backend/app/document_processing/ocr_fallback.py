@@ -5,9 +5,10 @@ When PyMuPDF detects a scanned PDF (image-only pages), this module
 renders each page as an image and runs Tesseract OCR to extract text.
 """
 
-from pathlib import Path
 from dataclasses import dataclass, field
+from pathlib import Path
 
+from app.core.exceptions import DocumentProcessingError
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -24,18 +25,21 @@ def _lazy_imports():
     if _fitz is None:
         try:
             import fitz
+
             _fitz = fitz
         except ImportError:
             logger.warning("pymupdf_not_installed")
     if _pytesseract is None:
         try:
             import pytesseract
+
             _pytesseract = pytesseract
         except ImportError:
             logger.warning("pytesseract_not_installed")
     if _pil_image is None:
         try:
             from PIL import Image
+
             _pil_image = Image
         except ImportError:
             logger.warning("pillow_not_installed")
@@ -44,6 +48,7 @@ def _lazy_imports():
 @dataclass
 class OCRResult:
     """Result of OCR processing."""
+
     raw_text: str
     page_texts: list[str] = field(default_factory=list)
     page_count: int = 0
@@ -127,6 +132,9 @@ def ocr_pdf(file_path: str | Path, dpi: int = 300, lang: str = "eng") -> OCRResu
             # Convert pixmap to PIL Image
             img_data = pixmap.tobytes("png")
             import io
+
+            if _pil_image is None or _pytesseract is None:
+                raise DocumentProcessingError("PIL or pytesseract not available.")
             img = _pil_image.open(io.BytesIO(img_data))
 
             # Run OCR

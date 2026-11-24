@@ -2,7 +2,7 @@
 Clause repository — data access layer for Clause model.
 """
 
-from typing import Sequence
+from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import select

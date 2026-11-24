@@ -1,0 +1,810 @@
+[
+  {
+    "clause_id": "RISK-CLAUSE-001",
+    "clause_text": "VENDOR'S TOTAL AGGREGATE LIABILITY UNDER THIS AGREEMENT SHALL UNDER NO CIRCUMSTANCES EXCEED ONE HUNDRED DOLLARS ($100), WHILE CUSTOMER'S LIABILITY FOR BREACH REMAINS UNLIMITED.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Limitation of Liability",
+    "key_quote": "$100",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-002",
+    "clause_text": "Customer agrees that Company may freely sell, monetize, and distribute all customer personal data, browsing telemetry, and financial records to third-party data brokers.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Data Privacy & Retention",
+    "key_quote": "sell, monetize, and distribute",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-003",
+    "clause_text": "Employee hereby irrevocably assigns to Company all intellectual property, inventions, and software created during employment, whether created on personal time or unrelated to company business.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Intellectual Property",
+    "key_quote": "personal time",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-004",
+    "clause_text": "Company retains user geolocation, device fingerprints, and biometric identifiers perpetually, even following account termination or verified deletion requests.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Data Privacy & Retention",
+    "key_quote": "perpetually",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-005",
+    "clause_text": "VENDOR SHALL INCUR NO LIABILITY WHATSOEVER FOR COMPLETE LOSS OF CUSTOMER DATA OR SERVICE OUTAGES, AND CUSTOMER WAIVES ALL LEGAL CLAIMS AT LAW OR EQUITY.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Limitation of Liability",
+    "key_quote": "no liability whatsoever",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-006",
+    "clause_text": "User waives all statutory rights to privacy, confidentiality, and jury trial, and agrees Company may inspect personal devices connected to the service.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Data Privacy & Retention",
+    "key_quote": "waives all statutory rights",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-007",
+    "clause_text": "Customer shall indemnify and hold Provider harmless from all claims and liabilities arising out of Provider's own gross negligence or willful misconduct.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Indemnification",
+    "key_quote": "Provider's own gross negligence",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-008",
+    "clause_text": "Licensor may at any time without notice remotely wipe, lock, or disable licensee workstations upon unilateral suspicion of breach.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Termination",
+    "key_quote": "remotely wipe, lock, or disable",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-009",
+    "clause_text": "Borrower agrees to an immediate confessed judgment of triple damages without hearing or notice upon lender's sole declaration of default.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Dispute Resolution & Arbitration",
+    "key_quote": "immediate confessed judgment",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-010",
+    "clause_text": "Customer agrees Company's aggregate liability for data breaches shall be limited to ten dollars ($10).",
+    "expected_risk_level": "CRITICAL",
+    "category": "Limitation of Liability",
+    "key_quote": "ten dollars ($10)",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-011",
+    "clause_text": "Contractor grants Company perpetual, irrevocable worldwide rights to Contractor's pre-existing patents without payment of additional royalties.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Intellectual Property",
+    "key_quote": "perpetual, irrevocable worldwide rights",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-012",
+    "clause_text": "Company reserves the right to secretly monitor, record, and transcribe user keystrokes and microphone inputs at all times.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Data Privacy & Retention",
+    "key_quote": "secretly monitor, record, and transcribe",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-013",
+    "clause_text": "Customer agrees that in the event of provider data breach, customer shall pay all provider legal defense expenses.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Indemnification",
+    "key_quote": "customer shall pay all provider legal defense expenses",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-014",
+    "clause_text": "Employee agrees to a five-year worldwide non-compete prohibiting work in any technology, software, or consulting field.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Restrictive Covenants",
+    "key_quote": "five-year worldwide non-compete",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-015",
+    "clause_text": "Tenant waives all rights to habitable premises and releases landlord from liability for structural building collapse.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Limitation of Liability",
+    "key_quote": "waives all rights to habitable premises",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-016",
+    "clause_text": "User agrees that Provider may unilaterally withdraw funds from user bank accounts without prior notice or authorization.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Unilateral Amendment",
+    "key_quote": "unilaterally withdraw funds",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-017",
+    "clause_text": "Customer agrees Provider's maximum liability for physical injury caused by equipment failure shall not exceed $50.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Limitation of Liability",
+    "key_quote": "shall not exceed $50",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-018",
+    "clause_text": "Contractor waives all legal remedies for non-payment of invoices and agrees Company may withhold fees indefinitely.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Limitation of Liability",
+    "key_quote": "withhold fees indefinitely",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-019",
+    "clause_text": "Vendor may disclose customer confidential trade secrets to any competitor upon vendor's sole commercial discretion.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Restrictive Covenants",
+    "key_quote": "disclose customer confidential trade secrets",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-020",
+    "clause_text": "Borrower agrees that interest rate shall escalate to 100% per annum immediately upon any grace period expiration.",
+    "expected_risk_level": "CRITICAL",
+    "category": "Dispute Resolution & Arbitration",
+    "key_quote": "escalate to 100% per annum",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-021",
+    "clause_text": "Customer shall defend, indemnify, and hold harmless Provider, its officers, directors, and agents from any and all damages, losses, and legal fees arising out of Customer's breach.",
+    "expected_risk_level": "HIGH",
+    "category": "Indemnification",
+    "key_quote": "Customer shall defend, indemnify",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-022",
+    "clause_text": "Company reserves the right to terminate customer account immediately without notice, without cause, and without refund of any prepaid fees.",
+    "expected_risk_level": "HIGH",
+    "category": "Termination",
+    "key_quote": "terminate customer account immediately without notice",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-023",
+    "clause_text": "Customer agrees that all disputes shall be resolved on an individual basis and waives any right to bring or participate in any class action lawsuit.",
+    "expected_risk_level": "HIGH",
+    "category": "Dispute Resolution & Arbitration",
+    "key_quote": "waives any right to bring or participate in any class action",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-024",
+    "clause_text": "Company reserves the right to modify, amend, or revise these terms and conditions at any time in its sole discretion by posting updated terms on the website.",
+    "expected_risk_level": "HIGH",
+    "category": "Unilateral Amendment",
+    "key_quote": "sole discretion by posting updated terms",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-025",
+    "clause_text": "Customer's sole and exclusive remedy for any platform outage, data loss, or system failure shall be the issuance of a pro-rated service credit not to exceed 5% of monthly fees.",
+    "expected_risk_level": "HIGH",
+    "category": "Limitation of Liability",
+    "key_quote": "service credit not to exceed 5%",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-026",
+    "clause_text": "Provider may unilaterally alter the specifications, pricing, and service levels upon ten days notice without customer right to terminate.",
+    "expected_risk_level": "HIGH",
+    "category": "Unilateral Amendment",
+    "key_quote": "unilaterally alter the specifications",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-027",
+    "clause_text": "Customer shall indemnify Provider against all third-party intellectual property claims, even where Provider software contributed to the alleged infringement.",
+    "expected_risk_level": "HIGH",
+    "category": "Indemnification",
+    "key_quote": "Customer shall indemnify Provider",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-028",
+    "clause_text": "Company may assign all contract rights and obligations to any third party without customer consent, but customer may not assign under any circumstance.",
+    "expected_risk_level": "HIGH",
+    "category": "Termination",
+    "key_quote": "without customer consent",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-029",
+    "clause_text": "All disputes must be litigated exclusively in the state courts of North Dakota, and customer consents to personal jurisdiction therein.",
+    "expected_risk_level": "HIGH",
+    "category": "Dispute Resolution & Arbitration",
+    "key_quote": "exclusively in the state courts",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-030",
+    "clause_text": "Tenant agrees that landlord may enter leased premises at any hour without prior notice for inspections.",
+    "expected_risk_level": "HIGH",
+    "category": "Restrictive Covenants",
+    "key_quote": "without prior notice",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-031",
+    "clause_text": "Provider disclaims all warranties regarding data recovery or uptime, and customer assumes sole responsibility for data backups.",
+    "expected_risk_level": "HIGH",
+    "category": "Limitation of Liability",
+    "key_quote": "assumes sole responsibility for data backups",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-032",
+    "clause_text": "Customer agrees that failure to object in writing within five (5) days to any invoice constitutes final and irrevocable waiver of billing disputes.",
+    "expected_risk_level": "HIGH",
+    "category": "Limitation of Liability",
+    "key_quote": "irrevocable waiver of billing disputes",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-033",
+    "clause_text": "Employee covenants not to solicit any company customer or vendor for a period of two (2) years following separation.",
+    "expected_risk_level": "HIGH",
+    "category": "Restrictive Covenants",
+    "key_quote": "period of two (2) years",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-034",
+    "clause_text": "Service provider may terminate subscription immediately if customer files a regulatory inquiry or consumer complaint.",
+    "expected_risk_level": "HIGH",
+    "category": "Termination",
+    "key_quote": "if customer files a regulatory inquiry",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-035",
+    "clause_text": "Licensee agrees to pay licensor's full attorney fees in any dispute where licensor prevails on any claim.",
+    "expected_risk_level": "HIGH",
+    "category": "Dispute Resolution & Arbitration",
+    "key_quote": "licensor's full attorney fees",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-036",
+    "clause_text": "Company may deactivate user account and retain customer content without backup or export if account remains inactive for thirty days.",
+    "expected_risk_level": "HIGH",
+    "category": "Termination",
+    "key_quote": "retain customer content without backup",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-037",
+    "clause_text": "Customer agrees that vendor's representations in marketing brochures do not form part of the agreement and cannot be relied upon.",
+    "expected_risk_level": "HIGH",
+    "category": "Limitation of Liability",
+    "key_quote": "cannot be relied upon",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-038",
+    "clause_text": "Provider may share customer employee contact details with marketing affiliates unless employee opts out via registered mail.",
+    "expected_risk_level": "HIGH",
+    "category": "Data Privacy & Retention",
+    "key_quote": "opts out via registered mail",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-039",
+    "clause_text": "Client shall indemnify contractor against any third-party claims arising from contractor's advice or deliverables.",
+    "expected_risk_level": "HIGH",
+    "category": "Indemnification",
+    "key_quote": "indemnify contractor against any third-party claims",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-040",
+    "clause_text": "Company reserves the right to re-price subscription renewal at whatever rate Company deems appropriate without notice.",
+    "expected_risk_level": "HIGH",
+    "category": "Unilateral Amendment",
+    "key_quote": "re-price subscription renewal",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-041",
+    "clause_text": "Customer agrees to pay liquidated damages of $10,000 for each minor breach of acceptable use guidelines.",
+    "expected_risk_level": "HIGH",
+    "category": "Limitation of Liability",
+    "key_quote": "liquidated damages of $10,000",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-042",
+    "clause_text": "Licensor may modify APIs and deprecate platform features at any time without liability for broken client integrations.",
+    "expected_risk_level": "HIGH",
+    "category": "Unilateral Amendment",
+    "key_quote": "deprecate platform features at any time",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-043",
+    "clause_text": "Employee acknowledges that all ideas conceived during tenure, even outside business hours, are company property.",
+    "expected_risk_level": "HIGH",
+    "category": "Intellectual Property",
+    "key_quote": "even outside business hours",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-044",
+    "clause_text": "Borrower shall pay lender a 10% penalty on total loan balance upon prepayment in whole or in part.",
+    "expected_risk_level": "HIGH",
+    "category": "Dispute Resolution & Arbitration",
+    "key_quote": "10% penalty on total loan balance",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-045",
+    "clause_text": "Vendor may disclose customer usage statistics and project metrics publicly in vendor marketing case studies without approval.",
+    "expected_risk_level": "HIGH",
+    "category": "Restrictive Covenants",
+    "key_quote": "publicly in vendor marketing case studies",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-046",
+    "clause_text": "Provider may increase subscription fees upon thirty (30) days advance notice prior to the start of any annual renewal term.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Unilateral Amendment",
+    "key_quote": "increase subscription fees upon thirty (30) days advance notice",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-047",
+    "clause_text": "Each party agrees that any dispute shall be submitted to confidential mediation before either party may commence arbitration proceedings.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Dispute Resolution & Arbitration",
+    "key_quote": "submitted to confidential mediation",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-048",
+    "clause_text": "Customer must provide written notice of material breach, and Provider shall have thirty (30) days to cure before customer may terminate.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Termination",
+    "key_quote": "thirty (30) days to cure",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-049",
+    "clause_text": "Late payments shall accrue interest at the rate of 1.5% per month or the maximum legal rate, whichever is less.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Limitation of Liability",
+    "key_quote": "accrue interest at the rate of 1.5%",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-050",
+    "clause_text": "Vendor reserves the right to perform scheduled maintenance during off-peak hours with at least twenty-four (24) hours advance notice.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Limitation of Liability",
+    "key_quote": "scheduled maintenance during off-peak hours",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-051",
+    "clause_text": "Recipient shall restrict disclosure of Confidential Information solely to employees with a strict need to know.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Restrictive Covenants",
+    "key_quote": "employees with a strict need to know",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-052",
+    "clause_text": "Customer grants Provider a non-exclusive license to use customer company logo in marketing materials and on customer lists.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Intellectual Property",
+    "key_quote": "use customer company logo in marketing",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-053",
+    "clause_text": "Either party may terminate this agreement if the other party enters into bankruptcy or insolvency proceedings.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Termination",
+    "key_quote": "enters into bankruptcy",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-054",
+    "clause_text": "Customer is responsible for all sales, use, and excise taxes resulting from subscription services provided hereunder.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Limitation of Liability",
+    "key_quote": "responsible for all sales, use, and excise taxes",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-055",
+    "clause_text": "Employee agrees that company computer equipment and network traffic may be audited periodically for cybersecurity compliance.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Data Privacy & Retention",
+    "key_quote": "audited periodically for cybersecurity compliance",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-056",
+    "clause_text": "Provider will retain inactive customer log data for up to ninety (90) days following termination for audit purposes.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Data Privacy & Retention",
+    "key_quote": "retain inactive customer log data for up to ninety (90) days",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-057",
+    "clause_text": "Customer shall pay all undisputed invoice amounts within thirty (30) days of receipt of invoice.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Limitation of Liability",
+    "key_quote": "within thirty (30) days of receipt of invoice",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-058",
+    "clause_text": "Contractor shall maintain comprehensive general liability insurance with limits not less than $1,000,000 per occurrence.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Indemnification",
+    "key_quote": "limits not less than $1,000,000",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-059",
+    "clause_text": "Each party represents that it has full authority and corporate power to enter into this agreement.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Limitation of Liability",
+    "key_quote": "full authority and corporate power",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-060",
+    "clause_text": "Any notice required hereunder shall be delivered by certified mail or commercial courier to the registered corporate address.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Dispute Resolution & Arbitration",
+    "key_quote": "certified mail or commercial courier",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-061",
+    "clause_text": "Licensor may update software documentation periodically to reflect new releases and operational improvements.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Unilateral Amendment",
+    "key_quote": "update software documentation periodically",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-062",
+    "clause_text": "Customer may audit Provider's security certifications once annually upon thirty (30) days written notice.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Data Privacy & Retention",
+    "key_quote": "audit Provider's security certifications once annually",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-063",
+    "clause_text": "Provider will deliver service level uptime of at least 99.5%, excluding scheduled maintenance windows.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Limitation of Liability",
+    "key_quote": "uptime of at least 99.5%",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-064",
+    "clause_text": "The parties agree that electronic signatures shall have the same legal validity and enforceability as handwritten signatures.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Dispute Resolution & Arbitration",
+    "key_quote": "electronic signatures shall have the same legal validity",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-065",
+    "clause_text": "Customer data stored in the SaaS platform is encrypted at rest using AES-256 and in transit via TLS 1.3.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Data Privacy & Retention",
+    "key_quote": "encrypted at rest using AES-256",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-066",
+    "clause_text": "Either party may assign this agreement in connection with a merger, acquisition, or sale of substantially all assets.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Termination",
+    "key_quote": "in connection with a merger, acquisition",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-067",
+    "clause_text": "Contractor warrants that deliverables will perform in material conformity with specifications for thirty (30) days following acceptance.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Limitation of Liability",
+    "key_quote": "thirty (30) days following acceptance",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-068",
+    "clause_text": "Provider may use anonymized aggregated telemetry data to train internal platform optimization algorithms.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Data Privacy & Retention",
+    "key_quote": "anonymized aggregated telemetry data",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-069",
+    "clause_text": "Tenant shall keep leased premises in clean condition and notify landlord promptly of any plumbing leaks.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Restrictive Covenants",
+    "key_quote": "notify landlord promptly",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-070",
+    "clause_text": "Customer agrees to cooperate reasonably with Provider during implementation and onboarding sessions.",
+    "expected_risk_level": "MEDIUM",
+    "category": "Limitation of Liability",
+    "key_quote": "cooperate reasonably with Provider",
+    "split": "dev"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-071",
+    "clause_text": "EXCEPT FOR GROSS NEGLIGENCE OR WILLFUL MISCONDUCT, EACH PARTY'S TOTAL AGGREGATE LIABILITY SHALL BE LIMITED TO THE FEES PAID BY CUSTOMER IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM.",
+    "expected_risk_level": "LOW",
+    "category": "Limitation of Liability",
+    "key_quote": "fees paid by customer in the twelve (12) months",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-072",
+    "clause_text": "Each party shall defend, indemnify, and hold harmless the other from third-party claims alleging that the indemnifying party's software infringes any valid copyright or patent.",
+    "expected_risk_level": "LOW",
+    "category": "Indemnification",
+    "key_quote": "Each party shall defend, indemnify, and hold harmless the other",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-073",
+    "clause_text": "Customer retains all right, title, and interest in Customer Data. Provider is granted a non-exclusive license solely to process data to provide the SaaS service.",
+    "expected_risk_level": "LOW",
+    "category": "Intellectual Property",
+    "key_quote": "Customer retains all right, title, and interest in Customer Data",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-074",
+    "clause_text": "Either party may terminate this agreement for convenience upon providing at least thirty (30) days prior written notice to the other party.",
+    "expected_risk_level": "LOW",
+    "category": "Termination",
+    "key_quote": "terminate this agreement for convenience upon providing at least thirty (30) days",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-075",
+    "clause_text": "Recipient shall protect disclosing party's confidential information using the same degree of care it uses for its own confidential information, but not less than reasonable care.",
+    "expected_risk_level": "LOW",
+    "category": "Restrictive Covenants",
+    "key_quote": "same degree of care it uses for its own confidential information",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-076",
+    "clause_text": "All inventions, software, and deliverables developed by Contractor specifically for Client shall constitute works made for hire owned by Client.",
+    "expected_risk_level": "LOW",
+    "category": "Intellectual Property",
+    "key_quote": "works made for hire owned by Client",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-077",
+    "clause_text": "This agreement shall be governed by and construed in accordance with the laws of the State of Delaware, without regard to conflicts of law principles.",
+    "expected_risk_level": "LOW",
+    "category": "Dispute Resolution & Arbitration",
+    "key_quote": "laws of the State of Delaware",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-078",
+    "clause_text": "Processor shall implement appropriate technical and organizational measures conforming with GDPR Article 28 to protect personal data.",
+    "expected_risk_level": "LOW",
+    "category": "Data Privacy & Retention",
+    "key_quote": "appropriate technical and organizational measures",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-079",
+    "clause_text": "Neither party shall be liable for any indirect, incidental, special, or consequential damages arising out of this agreement.",
+    "expected_risk_level": "LOW",
+    "category": "Limitation of Liability",
+    "key_quote": "indirect, incidental, special, or consequential damages",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-080",
+    "clause_text": "The indemnified party shall provide prompt written notice of any claim and permit the indemnifying party sole control of defense.",
+    "expected_risk_level": "LOW",
+    "category": "Indemnification",
+    "key_quote": "prompt written notice of any claim",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-081",
+    "clause_text": "Confidential information does not include information that is publicly known through no breach of recipient.",
+    "expected_risk_level": "LOW",
+    "category": "Restrictive Covenants",
+    "key_quote": "publicly known through no breach",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-082",
+    "clause_text": "Upon termination, vendor shall return or certify destruction of all customer confidential data within thirty (30) days.",
+    "expected_risk_level": "LOW",
+    "category": "Termination",
+    "key_quote": "return or certify destruction of all customer confidential data",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-083",
+    "clause_text": "No amendment to this agreement shall be effective unless made in writing and signed by authorized representatives of both parties.",
+    "expected_risk_level": "LOW",
+    "category": "Unilateral Amendment",
+    "key_quote": "signed by authorized representatives of both parties",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-084",
+    "clause_text": "Neither party shall be liable for performance delays resulting from acts of God, war, pandemic, or labor strikes.",
+    "expected_risk_level": "LOW",
+    "category": "Limitation of Liability",
+    "key_quote": "acts of God, war, pandemic",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-085",
+    "clause_text": "Each party shall maintain the confidentiality of the other party's proprietary financial data for a period of three (3) years.",
+    "expected_risk_level": "LOW",
+    "category": "Restrictive Covenants",
+    "key_quote": "period of three (3) years",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-086",
+    "clause_text": "In the event of any dispute, the prevailing party shall be entitled to recover reasonable attorney fees and costs.",
+    "expected_risk_level": "LOW",
+    "category": "Dispute Resolution & Arbitration",
+    "key_quote": "prevailing party shall be entitled to recover reasonable attorney fees",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-087",
+    "clause_text": "Customer may export customer data at any time during the subscription term in standard CSV or JSON format.",
+    "expected_risk_level": "LOW",
+    "category": "Data Privacy & Retention",
+    "key_quote": "export customer data at any time",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-088",
+    "clause_text": "All notices shall be given in writing to the addresses specified in the order form.",
+    "expected_risk_level": "LOW",
+    "category": "Dispute Resolution & Arbitration",
+    "key_quote": "given in writing to the addresses",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-089",
+    "clause_text": "This agreement constitutes the complete and exclusive agreement between the parties superseding all prior oral or written proposals.",
+    "expected_risk_level": "LOW",
+    "category": "Unilateral Amendment",
+    "key_quote": "complete and exclusive agreement",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-090",
+    "clause_text": "If any provision of this agreement is held invalid, the remaining provisions shall continue in full force and effect.",
+    "expected_risk_level": "LOW",
+    "category": "Dispute Resolution & Arbitration",
+    "key_quote": "remaining provisions shall continue in full force",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-091",
+    "clause_text": "Employee shall receive full salary and standard benefits during the applicable employment term.",
+    "expected_risk_level": "LOW",
+    "category": "Limitation of Liability",
+    "key_quote": "full salary and standard benefits",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-092",
+    "clause_text": "Each party warrants that it complies with all applicable anti-corruption and anti-bribery laws.",
+    "expected_risk_level": "LOW",
+    "category": "Indemnification",
+    "key_quote": "complies with all applicable anti-corruption",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-093",
+    "clause_text": "Licensor warrants that it holds all rights necessary to grant the licenses described herein.",
+    "expected_risk_level": "LOW",
+    "category": "Intellectual Property",
+    "key_quote": "holds all rights necessary to grant the licenses",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-094",
+    "clause_text": "Nothing in this agreement shall create a partnership, joint venture, or agency relationship between the parties.",
+    "expected_risk_level": "LOW",
+    "category": "Dispute Resolution & Arbitration",
+    "key_quote": "partnership, joint venture, or agency",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-095",
+    "clause_text": "Sections relating to liability, confidentiality, and intellectual property shall survive expiration or termination.",
+    "expected_risk_level": "LOW",
+    "category": "Termination",
+    "key_quote": "survive expiration or termination",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-096",
+    "clause_text": "The software is provided with standard commercial documentation and customer support during business hours.",
+    "expected_risk_level": "LOW",
+    "category": "Limitation of Liability",
+    "key_quote": "standard commercial documentation and customer support",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-097",
+    "clause_text": "Customer may designate authorized administrators to manage user permissions and access controls.",
+    "expected_risk_level": "LOW",
+    "category": "Data Privacy & Retention",
+    "key_quote": "designate authorized administrators",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-098",
+    "clause_text": "Payment shall be processed via standard automated clearinghouse (ACH) or corporate credit card.",
+    "expected_risk_level": "LOW",
+    "category": "Limitation of Liability",
+    "key_quote": "automated clearinghouse (ACH)",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-099",
+    "clause_text": "Provider agrees to maintain SOC 2 Type II audit compliance throughout the contract term.",
+    "expected_risk_level": "LOW",
+    "category": "Data Privacy & Retention",
+    "key_quote": "SOC 2 Type II audit compliance",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-100",
+    "clause_text": "Both parties agree to negotiate in good faith for thirty days prior to initiating formal dispute resolution.",
+    "expected_risk_level": "LOW",
+    "category": "Dispute Resolution & Arbitration",
+    "key_quote": "negotiate in good faith for thirty days",
+    "split": "test"
+  },
+  {
+    "clause_id": "RISK-CLAUSE-101",
+    "clause_text": "Employee may engage in passive personal investments that do not conflict with company business.",
+    "expected_risk_level": "LOW",
+    "category": "Restrictive Covenants",
+    "key_quote": "passive personal investments",
+    "split": "test"
+  }
+]
