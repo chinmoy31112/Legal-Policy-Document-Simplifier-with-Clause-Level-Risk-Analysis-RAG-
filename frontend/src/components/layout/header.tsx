@@ -1,14 +1,9 @@
 "use client";
 
-<<<<<<< HEAD
 import * as React from "react";
 import Link from "next/link";
 import { Menu, UploadCloud } from "lucide-react";
 import { useLayout } from "./layout-context";
-=======
-import { Search, Bell, ShieldCheck } from "lucide-react";
-import { useState } from "react";
->>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
 
 interface HeaderProps {
   title?: string;

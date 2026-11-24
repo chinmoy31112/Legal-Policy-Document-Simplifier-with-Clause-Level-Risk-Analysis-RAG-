@@ -3,7 +3,6 @@
 import * as React from "react";
 import { ClauseAnalysis } from "@/types/analysis";
 import { Document } from "@/types/document";
-<<<<<<< HEAD
 import { Search, FileText } from "lucide-react";
 import { RiskChip } from "@/components/ui/risk-chip";
 
@@ -14,9 +13,6 @@ interface DocumentViewerProps {
   onClauseSelect: (id: string) => void;
   className?: string;
 }
-=======
-import { Search, Sparkles, FileText } from "lucide-react";
->>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
 
 export function DocumentViewer({
   document,

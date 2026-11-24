@@ -130,26 +130,17 @@ export function ClauseCard({
           {/* Suggested Balanced Rewrite */}
           {clause.suggested_rewrite && (
             <div className="space-y-1.5">
-<<<<<<< HEAD
               <h5 className="text-[10px] font-bold uppercase tracking-wider text-teal-400 flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5" /> Suggested Balanced Alternative
               </h5>
               <div className="p-3 bg-teal-950/20 border border-teal-500/25 rounded-xl text-xs text-teal-200/90 leading-relaxed">
                 {clause.suggested_rewrite}
-=======
-              <h4 className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Suggested Balanced Rewrite
-              </h4>
-              <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 italic font-medium leading-relaxed">
-                &ldquo;{clause.suggested_rewrite}&rdquo;
->>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
               </div>
             </div>
           )}
 
           {/* Reference Knowledge Base Grounding */}
           {retrievedClauses && retrievedClauses.length > 0 && (
-<<<<<<< HEAD
             <div className="space-y-1.5 pt-1">
               <h5 className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
                 <BookOpen className="w-3.5 h-3.5" /> Grounded Benchmark Precedent
@@ -166,19 +157,6 @@ export function ClauseCard({
                     {ref.similarity_score !== undefined && (
                       <span className="text-cyan-400 font-mono text-[10px] px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20">
                         {(ref.similarity_score * 100).toFixed(0)}% match
-=======
-            <div className="space-y-2 pt-3 border-t border-slate-800">
-              <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> RAG Knowledge Base Benchmark Matches
-              </h4>
-              <div className="space-y-2">
-                {retrievedClauses.map((ref: { text?: string; content?: string; similarity?: number }, i: number) => (
-                  <div key={i} className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl text-[11px] text-slate-300 flex justify-between gap-3">
-                    <span className="line-clamp-2">{ref.text || ref.content}</span>
-                    {ref.similarity && (
-                      <span className="font-mono text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 whitespace-nowrap shrink-0 self-start">
-                        Match: {(ref.similarity * 100).toFixed(0)}%
->>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
                       </span>
                     )}
                   </div>

@@ -10,11 +10,7 @@ import {
   FileText,
   Shield,
   CheckCircle2,
-<<<<<<< HEAD
   UploadCloud,
-=======
-  Upload,
->>>>>>> b678432af63f3a4eb3d5c8ec4f5040c014cfed60
   ArrowRight,
   Zap,
   Sparkles,
