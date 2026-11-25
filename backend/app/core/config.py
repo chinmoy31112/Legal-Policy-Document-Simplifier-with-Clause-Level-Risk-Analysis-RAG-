@@ -192,7 +192,12 @@ class Settings(BaseSettings):
 
     @property
     def upload_path(self) -> Path:
-        path = Path(self.upload_dir)
+        raw_path = Path(self.upload_dir)
+        if raw_path.is_absolute():
+            path = raw_path
+        else:
+            backend_dir = Path(__file__).resolve().parent.parent.parent
+            path = (backend_dir / raw_path).resolve()
         path.mkdir(parents=True, exist_ok=True)
         return path
 

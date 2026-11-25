@@ -1,9 +1,14 @@
 """Test configuration and shared fixtures."""
 
 import asyncio
+import os
 import sys
 from collections.abc import AsyncGenerator
 from pathlib import Path
+
+# Force offline test mode so test execution NEVER consumes user's live Google API quota
+os.environ["APP_ENV"] = "test"
+os.environ["GOOGLE_API_KEY"] = ""
 
 import pytest
 import pytest_asyncio

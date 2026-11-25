@@ -6,9 +6,9 @@ and provides methods to retrieve the results.
 """
 
 import asyncio
-import os
 import time
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -63,14 +63,31 @@ class AnalysisService:
                 logger.info("analysis_task_already_completed", document_id=str(document_id))
                 return
 
+            # Resolve document file path robustly (handling relative/absolute paths across root and backend cwd)
+            resolved_file_path = Path(document.file_path)
+            if not resolved_file_path.exists():
+                settings = get_settings()
+                cand1 = settings.upload_path / str(document.user_id) / document.filename
+                cand2 = Path("backend") / resolved_file_path
+                cand3 = Path.cwd() / resolved_file_path
+                if cand1.exists():
+                    resolved_file_path = cand1
+                elif cand2.exists():
+                    resolved_file_path = cand2
+                elif cand3.exists():
+                    resolved_file_path = cand3
+
+            if resolved_file_path.exists():
+                document.file_path = str(resolved_file_path.resolve())
+
             # Measure upload stage duration
             stage_upload = 0.0
             if document.metadata_ and "upload_duration_seconds" in document.metadata_:
                 stage_upload = float(document.metadata_["upload_duration_seconds"])
             else:
                 t_stat_0 = time.perf_counter()
-                if os.path.exists(document.file_path):
-                    _ = os.path.getsize(document.file_path)
+                if resolved_file_path.exists():
+                    _ = resolved_file_path.stat().st_size
                 stage_upload = time.perf_counter() - t_stat_0
 
             await self.document_repo.update_status(document_id, "extracting")
@@ -80,7 +97,7 @@ class AnalysisService:
             segmenter = DocumentSegmenter(min_clause_length=50)
 
             t_ext_0 = time.perf_counter()
-            extraction_result = await asyncio.to_thread(extract_document, document.file_path)
+            extraction_result = await asyncio.to_thread(extract_document, str(resolved_file_path))
             stage_extraction = time.perf_counter() - t_ext_0
 
             t_seg_0 = time.perf_counter()

@@ -150,7 +150,7 @@ class DocumentService:
         # Create user-specific upload directory
         user_dir = settings.upload_path / str(user_id)
         user_dir.mkdir(parents=True, exist_ok=True)
-        file_path = user_dir / unique_filename
+        file_path = (user_dir / unique_filename).resolve()
 
         # Write file to disk
         try:
@@ -230,6 +230,11 @@ class DocumentService:
 
         # Delete file from disk
         file_path = Path(document.file_path)
+        if not file_path.exists():
+            settings = get_settings()
+            alt = settings.upload_path / str(user_id) / document.filename
+            if alt.exists():
+                file_path = alt
         if file_path.exists():
             try:
                 file_path.unlink()
