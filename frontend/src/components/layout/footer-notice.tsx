@@ -1,7 +1,17 @@
+"use client";
+
 import * as React from "react";
+import { usePathname } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 
 export function FooterNotice({ className = "" }: { className?: string }) {
+  const pathname = usePathname();
+
+  // Hide notice on analysis pages
+  if (pathname?.startsWith("/analysis")) {
+    return null;
+  }
+
   return (
     <footer
       role="contentinfo"

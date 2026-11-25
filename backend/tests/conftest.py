@@ -4,6 +4,7 @@ import sys
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
@@ -18,14 +19,33 @@ from app.main import create_app
 fastapi_app = create_app()
 
 
-@pytest_asyncio.fixture
-async def cleanup_database_pool():
-    """Dispose connection pool after each test to prevent cross-event-loop connection reuse."""
+@pytest.fixture(autouse=True)
+def cleanup_database_and_redis():
+    """Dispose connection pool and clear redis test cache/rate-limits between tests."""
+    try:
+        import redis
+
+        from app.core.config import get_settings
+        r = redis.from_url(get_settings().redis_url, socket_connect_timeout=0.5)
+        keys = r.keys("embedcache:*") + r.keys("ratelimit:*") + r.keys("user_quota:*")
+        if keys:
+            r.delete(*keys)
+    except Exception:
+        pass
     yield
     try:
-        import asyncio
-        if hasattr(engine, "pool") and (engine.pool.checkedin() + engine.pool.checkedout() > 0):
-            await asyncio.wait_for(engine.dispose(), timeout=1.0)
+        if hasattr(engine, "sync_engine"):
+            engine.sync_engine.dispose()
+    except Exception:
+        pass
+    try:
+        import redis
+
+        from app.core.config import get_settings
+        r = redis.from_url(get_settings().redis_url, socket_connect_timeout=0.5)
+        keys = r.keys("embedcache:*") + r.keys("ratelimit:*") + r.keys("user_quota:*")
+        if keys:
+            r.delete(*keys)
     except Exception:
         pass
 

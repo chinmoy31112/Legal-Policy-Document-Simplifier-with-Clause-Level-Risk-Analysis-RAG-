@@ -90,9 +90,9 @@ class Settings(BaseSettings):
     gemini_summary_model: str = "gemini-3.5-flash-lite"
     gemini_escalation_model: str | None = None
     gemini_enable_escalation: bool = False
-    # GEMINI_LLM_MODEL is a deprecated backward-compatibility alias.
+    # GEMINI_LLM_MODEL is a backward-compatibility alias.
     # When unset, the separate gemini_clause_model and gemini_summary_model settings are used.
-    gemini_llm_model: str | None = None
+    gemini_llm_model: str = "gemini-3.5-flash-lite"
     gemini_analysis_batch_size: int = 4
     # Temperature, top_p, and top_k are omitted by default (3.5 Flash-Lite does not accept them):
     gemini_temperature: float | None = None

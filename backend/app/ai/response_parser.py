@@ -145,3 +145,28 @@ class DocumentRiskAnalysis(BaseModel):
 
 # Backward compatibility alias
 LLMDocumentSummary = DocumentRiskAnalysis
+
+
+class DocumentClassification(BaseModel):
+    """Result of classifying whether an uploaded file is a legal/policy document."""
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    is_legal_document: bool = Field(
+        ...,
+        description="True if document is a contract, terms of service, privacy policy, NDA, or legal policy.",
+    )
+    document_type_detected: str = Field(
+        default="General Contract",
+        description="The identified type of document (e.g. 'Setup Guide', 'Terms of Service', 'Privacy Policy').",
+    )
+    confidence: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Classification confidence score.",
+    )
+    reason: str = Field(
+        default="",
+        description="Brief explanation of classification.",
+    )
+

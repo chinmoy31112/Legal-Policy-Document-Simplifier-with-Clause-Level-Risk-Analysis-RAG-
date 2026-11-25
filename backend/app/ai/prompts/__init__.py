@@ -88,12 +88,16 @@ Synthesize a comprehensive document-level risk assessment.
 Document Type: {document_type}
 Jurisdiction: {jurisdiction}
 Total Clauses Analyzed: {total_clauses}
+Knowledge Base Reference Precedents: {retrieval_reference_status}
 
 CLAUSE-LEVEL FINDINGS SUMMARY:
 {clause_summaries}
 
 AGGREGATION INSTRUCTIONS:
 1. Executive Summary: Write a clear 2-3 paragraph executive summary evaluating overall contract balance, commercial fairness, and biggest risks.
+   PRECEDENT WORDING CONSTRAINT:
+   - ONLY claim the document or clause "aligns with typical standards" when real reference clauses were retrieved (Knowledge Base Reference Precedents: MATCHED_PRECEDENTS).
+   - If Knowledge Base Reference Precedents indicates NO_CLOSE_REFERENCE_FOUND, explicitly state "no close reference found in standard precedent knowledge base" and evaluate risk purely on baseline commercial fairness without claiming alignment with benchmark standards.
 2. Overall Risk Level: Determine the holistic risk level (LOW, MEDIUM, HIGH, CRITICAL).
 3. Overall Risk Score: Calculate an indicative holistic score 0-100.
 4. Key Risks: List 3-6 primary contract-level red flags.
@@ -130,6 +134,48 @@ Never output markdown text outside the JSON object.
 """
 
 PROMPT_VERSION = "v1.2"
+
+DOCUMENT_CLASSIFICATION_PROMPT = """
+You are an expert legal document intake classifier.
+Determine whether the following document text is a genuine legal or policy document OR a non-legal document.
+
+LEGAL/POLICY DOCUMENTS INCLUDE:
+- Terms of Service / Terms of Use / EULA
+- Privacy Policies / Data Processing Agreements (DPA)
+- Commercial Agreements / Contracts / Master Services Agreements (MSA)
+- Non-Disclosure Agreements (NDA) / Confidentiality Agreements
+- Employment Contracts / Severance Agreements / Offer Letters
+- Commercial Leases / Rental Agreements
+- Loan / Credit / Financial Agreements
+- Corporate Bylaws, Legal Disclaimers, or Enforceable Regulatory Policies
+
+NON-LEGAL DOCUMENTS INCLUDE:
+- Software setup guides, installation instructions, developer readmes
+- User manuals, technical documentation, tutorials, how-to guides
+- Recipes, novels, poetry, blog posts, essays, academic lecture slides
+- General invoices, shipping manifests, receipts without contractual terms
+- Personal correspondence, meeting notes, project plans
+
+DECLARED CATEGORY FROM USER: {declared_type}
+
+DOCUMENT TEXT SAMPLE:
+<<<UNTRUSTED_DOCUMENT_SAMPLE>>>
+{sample_text}
+<<<END_UNTRUSTED_DOCUMENT_SAMPLE>>>
+
+INSTRUCTIONS:
+1. Objectively classify whether the document is a legal/policy document (true) or non-legal text (false).
+2. If non-legal, specify the true detected type (e.g., 'Setup Guide / Technical Documentation', 'User Manual', etc.).
+3. If it is a setup guide or non-legal document, set 'is_legal_document': false. Never invent legal significance for technical or setup guides.
+
+Output strictly a JSON object matching this schema:
+{{
+    "is_legal_document": true,
+    "document_type_detected": "string",
+    "confidence": 0.95,
+    "reason": "Brief explanation of why it is or is not a legal/policy document"
+}}
+"""
 
 BATCH_CLAUSE_ANALYSIS_PROMPT = """
 Analyze the following batch of legal clauses from a {document_type} (Jurisdiction: {jurisdiction}).

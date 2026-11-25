@@ -13,7 +13,8 @@ import asyncio
 import hashlib
 import json
 import re
-from typing import Any, TypeVar
+import time
+from typing import Any, TypeVar, cast
 
 from google import genai
 from google.genai import types
@@ -23,13 +24,17 @@ from pydantic import ValidationError as PydanticValidationError
 from app.ai.interfaces import LLMClient
 from app.ai.prompts import SYSTEM_INSTRUCTION
 from app.ai.rate_limiter import (
-    calculate_jittered_backoff,
+    calculate_jittered_backoff as calculate_jittered_backoff,
+)
+from app.ai.rate_limiter import (
     get_model_rate_limiter,
 )
-from app.ai.response_parser import DocumentRiskAnalysis, LLMClauseAnalysis
+from app.ai.response_parser import DocumentClassification, DocumentRiskAnalysis, LLMClauseAnalysis
 from app.core.config import get_settings
 from app.core.exceptions import AIServiceError
 from app.core.logging import get_logger
+
+__all__ = ["GeminiLLMClient", "LLMService", "calculate_jittered_backoff"]
 
 logger = get_logger(__name__)
 
@@ -42,7 +47,7 @@ class GeminiLLMClient(LLMClient):
     """
     Production-grade LLM client implementing the LLMClient interface.
     Features:
-    - Default model: gemini-2.5-flash (configured via Settings)
+    - Default model: gemini-3.5-flash-lite (configured via Settings)
     - Structured output validation with Pydantic schemas
     - Up to 2 automatic repair retries for malformed JSON or schema errors (Rule 3)
     - Full error recording per clause
@@ -51,10 +56,13 @@ class GeminiLLMClient(LLMClient):
 
     def __init__(self, model_name: str | None = None, force_offline: bool = False):
         self.settings = get_settings()
-        self._model_name: str = model_name or self.settings.gemini_llm_model or "gemini-2.5-flash"
-        self._force_offline = force_offline or not bool(self.settings.google_api_key.strip())
+        self._model_name: str = model_name or self.settings.gemini_llm_model or "gemini-3.5-flash-lite"
+        self._force_offline = force_offline or self.settings.app_env == "test" or not bool(self.settings.google_api_key.strip())
         self._rate_limiter = get_model_rate_limiter(self._model_name)
         self._prompt_cache: dict[str, Any] = {}
+        self.last_model_version: str | None = None
+        self._last_api_call_metrics: dict[str, Any] = {}
+        self.last_call_metrics: dict[str, Any] = {}
 
         if self._force_offline:
             logger.info("gemini_llm_offline_mode", reason="GOOGLE_API_KEY unset or offline mode requested.")
@@ -207,13 +215,19 @@ class GeminiLLMClient(LLMClient):
                 "legal_review_note": legal_note,
                 "no_reference_used": "[NO REFERENCE FOUND]" in prompt,
             }
-            return response_model.model_validate(data)
+            return cast(T, response_model.model_validate(data))
 
         elif issubclass(response_model, DocumentRiskAnalysis):
+            has_no_ref = "NO_CLOSE_REFERENCE_FOUND" in prompt
+            exec_summary = (
+                "The analyzed document exhibits asymmetric provisions primarily in limitation of liability and termination. No close reference found in standard precedent knowledge base; evaluated based on baseline contractual terms."
+                if has_no_ref
+                else "The analyzed document exhibits several asymmetric provisions, primarily in limitation of liability and unilateral termination. Negotiation is advised."
+            )
             doc_data = {
                 "overall_risk_score": 65,
                 "overall_risk_level": "HIGH",
-                "executive_summary": "The analyzed document exhibits several asymmetric provisions, primarily in limitation of liability and unilateral termination. Negotiation is advised.",
+                "executive_summary": exec_summary,
                 "key_risks": [
                     "Unilateral liability caps favoring drafter.",
                     "Disproportionate indemnification exposure.",
@@ -233,10 +247,48 @@ class GeminiLLMClient(LLMClient):
                 ],
                 "disclaimer": "This analysis provides informational document simplification and risk assessment only. It does not constitute legal advice. Review by a qualified attorney is recommended before executing legal agreements."
             }
-            return response_model.model_validate(doc_data)
+            return cast(T, response_model.model_validate(doc_data))
+
+        elif issubclass(response_model, DocumentClassification):
+            p_lower = prompt.lower()
+            non_legal_terms = [
+                "setup guide", "installation", "quickstart", "getting started",
+                "how to install", "prerequisites", "readme", "user manual",
+                "tutorial", "npm install", "pip install", "architecture",
+            ]
+            legal_terms = [
+                "in witness whereof", "hereby agree", "indemnification and hold harmless",
+                "governing law and jurisdiction", "limitation of liability",
+            ]
+            has_non_legal = any(t in p_lower for t in non_legal_terms)
+            has_strong_legal = any(t in p_lower for t in legal_terms)
+
+            if has_non_legal and not has_strong_legal:
+                class_data = {
+                    "is_legal_document": False,
+                    "document_type_detected": "Setup Guide / Technical Documentation",
+                    "confidence": 0.98,
+                    "reason": "Text contains technical setup instructions, dependencies, or user guides rather than binding contractual clauses.",
+                }
+            else:
+                class_data = {
+                    "is_legal_document": True,
+                    "document_type_detected": "Commercial Agreement / Terms",
+                    "confidence": 0.95,
+                    "reason": "Document contains contractual provisions, obligations, and legal covenants.",
+                }
+            return cast(T, response_model.model_validate(class_data))
 
         # Fallback empty construction
-        return response_model()
+        self.last_call_metrics = {
+            "latency": 0.005,
+            "input_tokens": max(10, len(prompt.split())),
+            "output_tokens": 120,
+            "retries": 0,
+            "repair_count": 0,
+            "rate_limiter_wait": 0.0,
+        }
+        return cast(T, response_model())
 
     async def _call_content_api(
         self, contents: str, sys_inst: str, response_mime_type: str = "application/json"
@@ -246,9 +298,14 @@ class GeminiLLMClient(LLMClient):
             raise AIServiceError("LLM client is not initialized")
 
         est_tokens = max(10, len(contents.split()) * 2 + 100)
+        total_limiter_wait = 0.0
+        api_retries = 0
+        call_latency = 0.0
 
         for rate_attempt in range(5):
+            t_acq = time.perf_counter()
             await self._rate_limiter.acquire(estimated_tokens=est_tokens)
+            total_limiter_wait += time.perf_counter() - t_acq
             try:
                 config_kwargs: dict[str, Any] = {
                     "system_instruction": sys_inst,
@@ -263,6 +320,7 @@ class GeminiLLMClient(LLMClient):
                 if self.settings.gemini_max_output_tokens is not None:
                     config_kwargs["max_output_tokens"] = self.settings.gemini_max_output_tokens
 
+                t_call = time.perf_counter()
                 response = await asyncio.wait_for(
                     self._client.aio.models.generate_content(
                         model=self._model_name,
@@ -271,10 +329,30 @@ class GeminiLLMClient(LLMClient):
                     ),
                     timeout=90.0,
                 )
+                call_latency += time.perf_counter() - t_call
+
+                input_tokens = est_tokens
+                output_tokens = len((response.text or "").split()) * 2
+                if hasattr(response, "usage_metadata") and response.usage_metadata:
+                    prompt_tok = getattr(response.usage_metadata, "prompt_token_count", None)
+                    if prompt_tok is not None:
+                        input_tokens = prompt_tok
+                    cand_tok = getattr(response.usage_metadata, "candidates_token_count", None)
+                    if cand_tok is not None:
+                        output_tokens = cand_tok
+
+                self._last_api_call_metrics = {
+                    "latency": call_latency,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "retries": api_retries,
+                    "rate_limiter_wait": total_limiter_wait,
+                }
                 self.last_model_version = getattr(response, "model_version", None) or self._model_name
                 await self._rate_limiter.circuit_breaker.record_success()
                 return response.text or ""
             except Exception as exc:
+                api_retries += 1
                 err_str = str(exc)
                 if isinstance(exc, asyncio.TimeoutError):
                     err_str = "504 Gateway Timeout: Google GenAI API request timed out after 90s."
@@ -283,20 +361,18 @@ class GeminiLLMClient(LLMClient):
                         r"'retryDelay':\s*'(\d+)s'", err_str
                     )
                     retry_delay = float(match.group(1)) + 0.5 if match else (2.0 * (rate_attempt + 1))
-                    cb_wait = await self._rate_limiter.circuit_breaker.record_failure(
+                    await self._rate_limiter.circuit_breaker.record_failure(
                         retry_after=retry_delay
-                    )
-                    delay = calculate_jittered_backoff(
-                        attempt=rate_attempt, retry_after=max(retry_delay, cb_wait)
                     )
                     logger.warning(
                         "llm_rate_limit_or_unavailable_retrying",
                         model=self._model_name,
                         attempt=rate_attempt + 1,
-                        retry_delay_seconds=round(delay, 2),
+                        retry_delay_seconds=round(retry_delay, 2),
                         error=err_str[:150],
                     )
-                    await asyncio.sleep(delay)
+                    # Do not double-sleep here: rate_limiter.acquire() in the next loop
+                    # iteration checks the circuit breaker and waits for the exact window.
                     continue
 
                 logger.error("llm_api_call_failed", error=err_str[:200])
@@ -322,7 +398,16 @@ class GeminiLLMClient(LLMClient):
         cache_key = hashlib.sha256(f"{self._model_name}:{prompt}".encode("utf-8")).hexdigest()
         if cache_key in self._prompt_cache:
             try:
-                return response_model.model_validate(self._prompt_cache[cache_key])
+                self.last_call_metrics = {
+                    "latency": 0.0,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "retries": 0,
+                    "repair_count": 0,
+                    "rate_limiter_wait": 0.0,
+                    "cached": True,
+                }
+                return cast(T, response_model.model_validate(self._prompt_cache[cache_key]))
             except Exception:
                 pass
 
@@ -330,6 +415,11 @@ class GeminiLLMClient(LLMClient):
         current_prompt = prompt
         last_raw_response = ""
         last_errors = []
+        accumulated_latency = 0.0
+        accumulated_limiter_wait = 0.0
+        accumulated_api_retries = 0
+        last_input_tokens = 0
+        last_output_tokens = 0
 
         # At most 2 repair retries = 3 total attempts
         for attempt in range(1 + MAX_REPAIR_RETRIES):
@@ -340,6 +430,12 @@ class GeminiLLMClient(LLMClient):
                     response_mime_type="application/json",
                 )
                 last_raw_response = raw_text
+                api_m = getattr(self, "_last_api_call_metrics", {})
+                accumulated_latency += api_m.get("latency", 0.0)
+                accumulated_limiter_wait += api_m.get("rate_limiter_wait", 0.0)
+                accumulated_api_retries += api_m.get("retries", 0)
+                last_input_tokens = api_m.get("input_tokens", 0)
+                last_output_tokens = api_m.get("output_tokens", 0)
 
                 # Parse JSON
                 try:
@@ -351,8 +447,16 @@ class GeminiLLMClient(LLMClient):
                     data = json.loads(cleaned)
 
                 # Validate against Pydantic schema
-                validated = response_model.model_validate(data)
+                validated = cast(T, response_model.model_validate(data))
                 self._prompt_cache[cache_key] = validated.model_dump()
+                self.last_call_metrics = {
+                    "latency": round(accumulated_latency, 3),
+                    "input_tokens": last_input_tokens,
+                    "output_tokens": last_output_tokens,
+                    "retries": accumulated_api_retries,
+                    "repair_count": attempt,
+                    "rate_limiter_wait": round(accumulated_limiter_wait, 3),
+                }
                 return validated
 
             except (json.JSONDecodeError, PydanticValidationError, Exception) as exc:

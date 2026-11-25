@@ -24,6 +24,16 @@ export function formatFileSize(bytes: number): string {
 }
 
 /**
+ * Pluralize a word based on count.
+ * Example: pluralize(1, "clause") -> "1 clause"
+ * Example: pluralize(5, "clause") -> "5 clauses"
+ */
+export function pluralize(count: number, singular: string, plural?: string): string {
+  const word = count === 1 ? singular : (plural || `${singular}s`);
+  return `${count} ${word}`;
+}
+
+/**
  * Format a date string for display.
  */
 export function formatDate(dateString: string): string {

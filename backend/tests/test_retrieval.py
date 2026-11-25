@@ -57,8 +57,8 @@ class TestGeminiEmbedder:
         assert len(vecs1) == 1
         assert len(vecs1[0]) == 768
 
-        h = embedder._hash_text(text)
-        assert h in embedder._cache
+        cache_key = embedder._cache_key(text, "RETRIEVAL_DOCUMENT")
+        assert cache_key in embedder._cache
 
         # Second call returns cached vector
         vecs2 = await embedder.embed_texts([text])

@@ -149,7 +149,7 @@ class FakeLLMClient(LLMClient):
 
     def __init__(
         self,
-        model_name: str = "gemini-2.5-flash",
+        model_name: str = "gemini-3.5-flash-lite",
         canned_response: Any | None = None,
         canned_text: str = "Fake LLM Text Response",
     ):

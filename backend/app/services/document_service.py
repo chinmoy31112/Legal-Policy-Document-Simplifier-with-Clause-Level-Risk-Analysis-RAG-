@@ -95,6 +95,9 @@ class DocumentService:
         Raises:
             FileUploadError: If file validation fails.
         """
+        import time
+
+        t_upload_0 = time.perf_counter()
         if not file.filename:
             raise FileUploadError("No filename provided.")
 
@@ -157,6 +160,7 @@ class DocumentService:
             raise FileUploadError(f"Failed to save file: {e}")
 
         # Create database record
+        upload_duration = round(time.perf_counter() - t_upload_0, 4)
         document = await self.document_repo.create(
             user_id=user_id,
             filename=unique_filename,
@@ -169,7 +173,7 @@ class DocumentService:
             status="uploaded",
             raw_text=None,
             is_scanned=False,
-            metadata={},
+            metadata={"upload_duration_seconds": upload_duration},
         )
 
         await self.session.commit()

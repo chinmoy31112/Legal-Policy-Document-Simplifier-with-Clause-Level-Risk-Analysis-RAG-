@@ -10,6 +10,7 @@ export type DocumentType =
   | "service_agreement"
   | "loan_agreement"
   | "eula"
+  | "non_legal"
   | "other";
 
 export type DocumentStatus =
@@ -75,6 +76,7 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   service_agreement: "Service Agreement",
   loan_agreement: "Loan Agreement",
   eula: "EULA",
+  non_legal: "Non-Legal Document",
   other: "Other",
 };
 

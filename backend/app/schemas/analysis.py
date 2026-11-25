@@ -77,8 +77,8 @@ class DocumentAnalysisResponse(BaseModel):
 
     id: UUID
     document_id: UUID
-    overall_risk_score: int = Field(..., ge=0, le=100)
-    overall_summary: str
+    overall_risk_score: int | None = Field(default=None, ge=0, le=100)
+    overall_summary: str | None = None
     top_risky_clauses: list[dict[str, Any]] = Field(default_factory=list)
     clause_statistics: dict[str, Any] = Field(default_factory=dict)
     risk_distribution: dict[str, Any] = Field(default_factory=dict)

@@ -42,15 +42,6 @@ export function Header({ title, subtitle }: HeaderProps) {
 
       {/* Right Controls */}
       <div className="flex items-center gap-2.5 shrink-0">
-        {/* Status Pill */}
-        <div
-          className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--risk-standard-bg)] border border-[var(--risk-standard-border)] text-[var(--risk-standard-text)] text-[11px] font-medium"
-          aria-label="System status: Gemini RAG Active"
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--risk-standard-text)] animate-pulse" />
-          <span>Gemini RAG Active</span>
-        </div>
-
         {/* Quick CTA */}
         <Link
           href="/upload"

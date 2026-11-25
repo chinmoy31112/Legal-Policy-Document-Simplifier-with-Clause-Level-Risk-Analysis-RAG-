@@ -13,7 +13,7 @@ def test_settings_defaults():
     """Verify default configurations conform to ADRs and Phase 1 specifications."""
     settings = get_settings()
     assert settings.gemini_embedding_model == "gemini-embedding-2"
-    assert settings.gemini_llm_model == "gemini-2.5-flash"
+    assert settings.gemini_llm_model == "gemini-3.5-flash-lite"
     assert settings.embedding_dimension == 768
     assert settings.vector_store_type in ("pgvector", "chroma", "memory")
     assert settings.enable_text_logging is False

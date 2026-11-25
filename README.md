@@ -1,23 +1,7 @@
-<div align="center">
-
 # ⚖️ Legal & Policy Document Simplifier
 ### Enterprise Clause-Level Risk Analysis & RAG Platform
 
 *Transforming complex legal contracts, Terms of Service, and privacy policies into clear, plain-English simplifications with clause-level risk ratings, evidence grounding, and balanced rewrites.*
-
-[![CI/CD Status](https://img.shields.io/badge/CI%2FCD-passing-brightgreen?style=for-the-badge&logo=github-actions&logoColor=white)](https://github.com)
-[![Python Version](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Next.js](https://img.shields.io/badge/Next.js-16.3-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%20%2B%20pgvector-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
-[![Google Gemini](https://img.shields.io/badge/Google%20Gemini-3.5%20Flash--Lite-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-
-<br/>
-
-[Overview](#-executive-summary--key-metrics) • [Architecture](#-system-architecture) • [Core Innovations](#-core-innovations--guardrails) • [Technical Deep-Dives](#-technical-specifications--deep-dives) • [Evaluation Benchmarks](#-evaluation-framework--benchmark-results) • [Quickstart](#-quickstart--deployment)
-
-</div>
 
 ---
 
@@ -65,6 +49,9 @@ The **Legal & Policy Document Simplifier** is a production-grade, enterprise por
 4. **Rule 4: Honest Uncertainty & Non-Legal-Advice Policy** — Four standardized risk tiers (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`). The platform provides informational risk assessments and never declares a clause "legally unenforceable" or provides legal advice. Statutory legal disclaimers appear across all UI screens and generated export files.
 5. **Rule 5: Untrusted Data Boundaries & Injection Defense** — Document text is strictly encapsulated within cryptographic security delimiters (`<<<UNTRUSTED_DOCUMENT_CLAUSE>>>`). Adversarial overrides ("ignore previous instructions") are neutralized without compromising the risk evaluation (100% defense rate).
 6. **Rule 6: Zero-Text Logging Policy** — Raw contract text, PII, and credentials are automatically intercepted and redacted by a custom `structlog` pipeline (`redact_document_text_processor`). Logs contain only operational metadata, IDs, execution timings, and status codes.
+7. **Rule 7: Document Intake Classification & Non-Legal Protection** — Before clause-level analysis runs, uploads undergo automated intake classification. If an upload is non-legal material (e.g., technical setup guide, installation manual, or documentation), the platform labels it as non-legal, displays *"This doesn't look like a legal or policy document"*, and skips risk scoring to prevent invented legal claims or hallucinated contract provisions.
+8. **Rule 8: Precedent Citation Constraint** — The system only claims a contract "aligns with typical standards" when real benchmark reference clauses were successfully retrieved from the knowledge base. If no close reference cleared the threshold, the summary explicitly indicates *"no close reference found"* and evaluates terms purely on baseline commercial balance.
+9. **Rule 9: Real-Time Progressive Streaming** — Clause batches commit to PostgreSQL as they complete (capped at 3 concurrent batches under Gemini rate limits), streaming live updates to the frontend without blocking spinners or UI overlaps.
 
 ---
 
@@ -355,84 +342,6 @@ Total Benchmark Clauses: 200
 </details>
 
 ---
-
-## 📊 Evaluation Framework & Benchmark Results
-
-### 1. Mathematical Metric Formulations
-
-The evaluation framework assesses every component through rigorous, verifiable quantitative formulas:
-
-#### Clause Boundary Segmentation ($F_1$ Score)
-Let $G$ be the ground-truth boundary offsets and $P$ the predicted offsets with tolerance $\tau = \pm 15$ characters:
-$$\text{Precision} = \frac{|P \cap_{\tau} G|}{|P|}, \quad \text{Recall} = \frac{|P \cap_{\tau} G|}{|G|}, \quad \text{Boundary } F_1 = 2 \cdot \frac{\text{Precision} \cdot \text{Recall}}{\text{Precision} + \text{Recall}}$$
-
-#### Retrieval Performance (Recall@K & MRR)
-$$\text{Recall@}K = \frac{1}{|Q|} \sum_{q \in Q} \mathbb{I}(\text{Top-}K(q) \cap R_q \neq \emptyset), \quad \text{MRR} = \frac{1}{|Q|} \sum_{q \in Q} \frac{1}{\text{rank}_1(q)}$$
-
-#### Evidence Grounding Rate
-$$\text{Grounding Rate} = \frac{\sum_{c=1}^C \mathbb{I}(\text{Reason}_c \text{ quotes clause } \lor \text{ cites valid REF-ID})}{C} \times 100\%$$
-
-#### Readability Formulas
-- **Flesch Reading Ease (FRE):**
-  $$\text{FRE} = 206.835 - 1.015 \left(\frac{\text{total words}}{\text{total sentences}}\right) - 84.6 \left(\frac{\text{total syllables}}{\text{total words}}\right)$$
-- **Flesch-Kincaid Grade Level (FKGL):**
-  $$\text{FKGL} = 0.39 \left(\frac{\text{total words}}{\text{total sentences}}\right) + 11.8 \left(\frac{\text{total syllables}}{\text{total words}}\right) - 15.59$$
-
----
-
-### 2. End-to-End System Evaluation (Phases 0–7)
-
-| Evaluation Phase | Metric / Gate Check | Target Gate | Achieved Value | Status |
-| :--- | :--- | :---: | :---: | :---: |
-| **Phase 0: Planning** | Architectural Decisions & Risk Register | 9/9 Docs | **100% Present** | 🟢 **PASSED** |
-| **Phase 1: Foundation** | AI Interfaces, Config, Privacy Redaction | 4/4 Checks | **100% Passing** | 🟢 **PASSED** |
-| **Phase 2: Ingestion** | Clause Boundary $F_1$ Score | $\ge 0.85$ | **0.9412** | 🟢 **PASSED** |
-| **Phase 2: Ingestion** | Bounding Box Coordinate Coverage | $\ge 98.0\%$ | **100.0%** | 🟢 **PASSED** |
-| **Phase 2: Ingestion** | Document Extraction Throughput | Fast | **3.27 ms / doc** | ⚡ **FAST** |
-| **Phase 3: Retrieval** | Recall@5 | $\ge 0.80$ | **0.8286** | 🟢 **PASSED** |
-| **Phase 3: Retrieval** | Mean Reciprocal Rank (MRR) | $\ge 0.70$ | **0.8286** | 🟢 **PASSED** |
-| **Phase 3: Retrieval** | Out-of-Domain Query Rejection Rate | $100.0\%$ | **100.0%** | 🟢 **PASSED** |
-| **Phase 4: Reasoning** | Schema Validation Failure Rate | $0.0\%$ | **0.0%** | 🟢 **PASSED** |
-| **Phase 4: Reasoning** | Adversarial Injection Defense | $100.0\%$ | **100.0% Defense** | 🛡️ **PASSED** |
-| **Phase 5: API & Data** | End-to-End Async Processing Gate | True | **PASSED** | 🟢 **PASSED** |
-| **Phase 5: API & Data** | GDPR Account Erasure & File Unlink | 100% Cleanup | **Verified** | 🟢 **PASSED** |
-| **Phase 6: Frontend** | Next.js Production Build | 0 errors | **15/15 Routes Clean** | 🟢 **PASSED** |
-| **Phase 6: Frontend** | ESLint & TypeScript Cleanliness | 0 warnings | **0 errors, 0 warnings** | 🟢 **PASSED** |
-| **Phase 7: Final Gate** | **Held-Out Test Split Macro $F_1$** | $\ge 0.75$ | **0.9836** | 🟢 **PASSED** |
-| **Phase 7: Final Gate** | **Held-Out Evidence Grounding** | $\ge 0.90$ | **0.9355** | 🟢 **PASSED** |
-| **Phase 7: Final Gate** | **Flesch-Kincaid Grade Level** | $\le 10.0$ | **Grade 4.3** | 🟢 **PASSED** |
-| **Phase 7: Final Gate** | **Flesch Reading Ease** | $\ge 60.0$ | **80.3 / 100** | 🟢 **PASSED** |
-| **Phase 7: Final Gate** | **Zero-Text Privacy Logging Audit** | $100.0\%$ | **100.0% Pass** | 🔒 **PASSED** |
-
----
-
-### 3. Gemini 3.5 Flash-Lite Dev-Split Model Evaluation Report
-
-Evaluated against the 70 dev-split clauses in `tests/eval_data/risk_set/risk_dataset.json` (Batch size 4, rate-limited at 12 RPM):
-
-| Metric | Target Gate | Achieved Value | Status |
-| :--- | :---: | :---: | :---: |
-| **High-Risk Recall (HIGH + CRITICAL)** | $\ge 0.85$ | **0.9333 (93.3%)** | 🟢 **PASSED** |
-| **Within-One-Level Accuracy** | $\ge 0.90$ | **1.0000 (100.0%)** | 🟢 **PASSED** |
-| **Schema Validity** | $100.0\%$ | **100.0%** | 🟢 **PASSED** |
-| **Evidence Grounding Precision** | $\ge 0.90$ | **0.9643 (96.4%)** | 🟢 **PASSED** |
-| **API Calls Dispatched** | $\le 400$ RPD | **18 calls** | 🟢 **WITHIN BUDGET** |
-| **Tokens Consumed** | — | **42,685 tokens** | ℹ️ Operational |
-| **Estimated Daily Capacity** | — | **~100 docs/day** (15-clause agreements) | ℹ️ Free-tier budget |
-| **Held-Out Test Clauses Preserved** | 31 clauses | **31 clauses (UNTOUCHED)** | 🔒 **PRESERVED** |
-
----
-
-## ⚖️ Standardized 4-Tier Risk Taxonomy
-
-Every analyzed clause is classified into one of four canonical risk tiers:
-
-| Tier | Score Range | Badge Color | Description | Practical Guidance |
-| :--- | :---: | :---: | :--- | :--- |
-| **LOW** | 0 – 29 | 🟢 Emerald | Standard, reciprocal terms adhering to customary industry practices. | Safe to accept; standard commercial boilerplate. |
-| **MEDIUM** | 30 – 59 | 🟡 Amber | Moderately asymmetric terms slightly favoring one party. | Review carefully; negotiate if high-value transaction. |
-| **HIGH** | 60 – 79 | 🟠 Orange | Significant imbalance (unilateral amendment, asymmetric fee-shifting). | Push for mutual terms or narrower scoping. |
-| **CRITICAL** | 80 – 100 | 🔴 Rose / Red | Severe liability waivers, broad personal indemnity, unrestricted data sharing. | **Do not sign without legal counsel review.** |
 
 > [!IMPORTANT]
 > **Statutory Legal Notice:** This platform is an automated AI document simplification and risk analysis tool designed for informational purposes only. It does not provide legal advice, legal opinions, or attorney recommendations. The platform does not establish an attorney-client relationship. Users should consult a qualified legal professional before signing or executing binding legal agreements.

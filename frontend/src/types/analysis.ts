@@ -52,8 +52,8 @@ export interface RiskDistribution {
 export interface DocumentAnalysis {
   id: string;
   document_id: string;
-  overall_risk_score: number;
-  overall_summary: string;
+  overall_risk_score: number | null;
+  overall_summary: string | null;
   top_risky_clauses: Array<Record<string, unknown>>;
   clause_statistics: Record<string, unknown>;
   risk_distribution: RiskDistribution;

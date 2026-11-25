@@ -61,7 +61,7 @@ class DocumentAnalysis(Base, UUIDMixin, TimestampMixin):
         unique=True,
         index=True,
     )
-    overall_risk_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    overall_risk_score: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
     overall_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     top_risky_clauses: Mapped[list | None] = mapped_column(JSONB, nullable=True, default=list)
     clause_statistics: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=dict)

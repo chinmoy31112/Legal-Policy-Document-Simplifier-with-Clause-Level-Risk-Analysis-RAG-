@@ -6,6 +6,8 @@ and provides methods to retrieve the results.
 """
 
 import asyncio
+import os
+import time
 from collections.abc import Sequence
 from typing import Any
 from uuid import UUID
@@ -47,6 +49,7 @@ class AnalysisService:
         """
         Background task to run the full RAG analysis pipeline on a document.
         """
+        job_start_time = time.perf_counter()
         try:
             logger.info("analysis_task_started", document_id=str(document_id))
 
@@ -60,23 +63,75 @@ class AnalysisService:
                 logger.info("analysis_task_already_completed", document_id=str(document_id))
                 return
 
+            # Measure upload stage duration
+            stage_upload = 0.0
+            if document.metadata_ and "upload_duration_seconds" in document.metadata_:
+                stage_upload = float(document.metadata_["upload_duration_seconds"])
+            else:
+                t_stat_0 = time.perf_counter()
+                if os.path.exists(document.file_path):
+                    _ = os.path.getsize(document.file_path)
+                stage_upload = time.perf_counter() - t_stat_0
+
             await self.document_repo.update_status(document_id, "extracting")
             await self.session.commit()
 
-            # Run heavy extraction and segmentation in a thread pool to avoid blocking the event loop
+            # Measure extraction and segmentation in separate stages
             segmenter = DocumentSegmenter(min_clause_length=50)
 
-            def process_document():
-                ext_res = extract_document(document.file_path)
-                segs = segmenter.segment(ext_res)
-                return ext_res, segs
+            t_ext_0 = time.perf_counter()
+            extraction_result = await asyncio.to_thread(extract_document, document.file_path)
+            stage_extraction = time.perf_counter() - t_ext_0
 
-            extraction_result, segments = await asyncio.to_thread(process_document)
+            t_seg_0 = time.perf_counter()
+            segments = await asyncio.to_thread(segmenter.segment, extraction_result)
+            stage_segmentation = time.perf_counter() - t_seg_0
 
             # Update document with extraction results
             document.raw_text = extraction_result.raw_text
             document.is_scanned = extraction_result.is_scanned
-            document.metadata_ = extraction_result.metadata
+            existing_meta = document.metadata_ or {}
+            if extraction_result.metadata:
+                existing_meta.update(extraction_result.metadata)
+            document.metadata_ = existing_meta
+
+            # Pre-analysis legal classification check:
+            # Prevents hallucinating contract risk scores and invented provisions on non-legal documents (e.g. setup guides)
+            classification = await self.pipeline.classify_document_type(
+                raw_text=extraction_result.raw_text,
+                declared_type=document.document_type,
+            )
+
+            if not classification.is_legal_document:
+                logger.info(
+                    "document_classified_as_non_legal",
+                    document_id=str(document_id),
+                    detected_type=classification.document_type_detected,
+                    reason=classification.reason,
+                )
+                document.document_type = "non_legal"
+                existing_meta["detected_document_type"] = classification.document_type_detected
+                existing_meta["classification_reason"] = classification.reason
+                existing_meta["is_legal_document"] = False
+                document.metadata_ = existing_meta
+
+                non_legal_summary = DocumentAnalysis(
+                    document_id=document.id,
+                    overall_risk_score=None,
+                    overall_summary="This doesn't look like a legal or policy document.",
+                    top_risky_clauses=[],
+                    clause_statistics={"total_clauses": 0, "evaluated_clauses": 0},
+                    risk_distribution={},
+                    recommendations=[
+                        f"Detected document type: {classification.document_type_detected}.",
+                        "Upload a legal contract, Terms of Service, Privacy Policy, or NDA to run clause-level risk scoring.",
+                    ],
+                )
+                self.session.add(non_legal_summary)
+                await self.document_repo.update_status(document_id, "completed")
+                await self.session.commit()
+                return
+
             await self.session.commit()
 
             # Create clauses
@@ -130,10 +185,13 @@ class AnalysisService:
             unembedded_clauses = [c for c in clauses if c.content]
             unembedded_texts = [c.content for c in unembedded_clauses]
             clause_vectors: list[list[float]] = []
+            stage_embedding = 0.0
             if unembedded_texts:
+                t_emb_0 = time.perf_counter()
                 clause_vectors = await self.pipeline.embedder.embed_texts(
                     unembedded_texts, task_type="RETRIEVAL_DOCUMENT"
                 )
+                stage_embedding = time.perf_counter() - t_emb_0
 
             clause_vector_map = {
                 str(c.id): clause_vectors[i]
@@ -161,7 +219,8 @@ class AnalysisService:
                 else:
                     unanalyzed_clauses.append(clause)
 
-            # Analyze unanalyzed clauses using configurable batch size (default 4)
+            # Analyze unanalyzed clauses using configurable batch size with bounded concurrency & streaming commits
+            stage_llm_batches = 0.0
             if unanalyzed_clauses:
                 batch_inputs = [
                     {
@@ -172,47 +231,131 @@ class AnalysisService:
                     for c in unanalyzed_clauses
                 ]
 
+                db_lock = asyncio.Lock()
+                committed_clause_ids: set[str] = set()
+
+                async def on_batch_completed(batch_items: list[tuple[int, dict[str, Any]]]) -> None:
+                    async with db_lock:
+                        for orig_idx, result_dict in batch_items:
+                            clause = unanalyzed_clauses[orig_idx]
+                            c_id_str = str(clause.id)
+                            if c_id_str in committed_clause_ids:
+                                continue
+                            committed_clause_ids.add(c_id_str)
+
+                            plain_eng = result_dict.get("plain_english") or result_dict.get(
+                                "plain_english_summary", ""
+                            )
+                            risk_lvl = result_dict.get("risk_level") or result_dict.get(
+                                "risk_category", "LOW"
+                            )
+                            conf = (
+                                result_dict.get("confidence")
+                                if "confidence" in result_dict
+                                else result_dict.get("confidence_score", 0.0)
+                            )
+                            concern = result_dict.get("legal_review_note") or result_dict.get(
+                                "potential_legal_concern"
+                            )
+                            refs = result_dict.get("retrieved_references") or result_dict.get(
+                                "retrieved_clauses", []
+                            )
+
+                            track_clause_risk(str(risk_lvl))
+
+                            analysis_result = AnalysisResult(
+                                clause_id=clause.id,
+                                document_id=document.id,
+                                plain_english_summary=plain_eng,
+                                risk_score=result_dict.get("risk_score", 0),
+                                risk_category=risk_lvl,
+                                risk_reasons=result_dict.get("risk_reasons", []),
+                                missing_protections=result_dict.get("missing_protections", []),
+                                suggested_rewrite=result_dict.get("suggested_rewrite"),
+                                potential_legal_concern=concern,
+                                confidence_score=conf,
+                                raw_llm_response=result_dict.get("raw_llm_response", result_dict),
+                                retrieved_clauses=refs,
+                            )
+                            self.session.add(analysis_result)
+                            clause_analyses_dicts.append(result_dict)
+
+                        await self.session.commit()
+                        logger.info(
+                            "committed_analysis_batch",
+                            document_id=str(document_id),
+                            batch_committed=len(batch_items),
+                            total_committed=len(committed_clause_ids),
+                        )
+
+                t_batches_0 = time.perf_counter()
                 batch_results = await self.pipeline.analyze_clauses_batch(
                     clauses=batch_inputs,
                     document_type=document.document_type,
                     jurisdiction=document.jurisdiction,
                     batch_size=settings.gemini_analysis_batch_size,
+                    max_concurrency=3,
+                    on_batch_complete=on_batch_completed,
                 )
+                stage_llm_batches = time.perf_counter() - t_batches_0
 
-                for clause, result_dict in zip(unanalyzed_clauses, batch_results, strict=False):
-                    plain_eng = result_dict.get("plain_english") or result_dict.get("plain_english_summary", "")
-                    risk_lvl = result_dict.get("risk_level") or result_dict.get("risk_category", "LOW")
-                    conf = result_dict.get("confidence") if "confidence" in result_dict else result_dict.get("confidence_score", 0.0)
-                    concern = result_dict.get("legal_review_note") or result_dict.get("potential_legal_concern")
-                    refs = result_dict.get("retrieved_references") or result_dict.get("retrieved_clauses", [])
+                # Fallback: commit any remaining clause that wasn't committed via callback
+                async with db_lock:
+                    uncommitted_count = 0
+                    for clause, result_dict in zip(unanalyzed_clauses, batch_results, strict=False):
+                        c_id_str = str(clause.id)
+                        if c_id_str in committed_clause_ids:
+                            continue
+                        committed_clause_ids.add(c_id_str)
+                        plain_eng = result_dict.get("plain_english") or result_dict.get(
+                            "plain_english_summary", ""
+                        )
+                        risk_lvl = result_dict.get("risk_level") or result_dict.get(
+                            "risk_category", "LOW"
+                        )
+                        conf = (
+                            result_dict.get("confidence")
+                            if "confidence" in result_dict
+                            else result_dict.get("confidence_score", 0.0)
+                        )
+                        concern = result_dict.get("legal_review_note") or result_dict.get(
+                            "potential_legal_concern"
+                        )
+                        refs = result_dict.get("retrieved_references") or result_dict.get(
+                            "retrieved_clauses", []
+                        )
 
-                    track_clause_risk(str(risk_lvl))
+                        track_clause_risk(str(risk_lvl))
 
-                    analysis_result = AnalysisResult(
-                        clause_id=clause.id,
-                        document_id=document.id,
-                        plain_english_summary=plain_eng,
-                        risk_score=result_dict.get("risk_score", 0),
-                        risk_category=risk_lvl,
-                        risk_reasons=result_dict.get("risk_reasons", []),
-                        missing_protections=result_dict.get("missing_protections", []),
-                        suggested_rewrite=result_dict.get("suggested_rewrite"),
-                        potential_legal_concern=concern,
-                        confidence_score=conf,
-                        raw_llm_response=result_dict.get("raw_llm_response", result_dict),
-                        retrieved_clauses=refs,
-                    )
-                    self.session.add(analysis_result)
-                    clause_analyses_dicts.append(result_dict)
+                        analysis_result = AnalysisResult(
+                            clause_id=clause.id,
+                            document_id=document.id,
+                            plain_english_summary=plain_eng,
+                            risk_score=result_dict.get("risk_score", 0),
+                            risk_category=risk_lvl,
+                            risk_reasons=result_dict.get("risk_reasons", []),
+                            missing_protections=result_dict.get("missing_protections", []),
+                            suggested_rewrite=result_dict.get("suggested_rewrite"),
+                            potential_legal_concern=concern,
+                            confidence_score=conf,
+                            raw_llm_response=result_dict.get("raw_llm_response", result_dict),
+                            retrieved_clauses=refs,
+                        )
+                        self.session.add(analysis_result)
+                        clause_analyses_dicts.append(result_dict)
+                        uncommitted_count += 1
 
-                await self.session.commit()
+                    if uncommitted_count > 0:
+                        await self.session.commit()
 
             # Generate overall document summary using configured summary model
+            t_sum_0 = time.perf_counter()
             doc_summary_dict = await self.pipeline.generate_document_summary(
                 document_type=document.document_type,
                 jurisdiction=document.jurisdiction,
                 clause_analyses=clause_analyses_dicts,
             )
+            stage_summary = time.perf_counter() - t_sum_0
 
             # Create or update DocumentAnalysis record
             existing_doc_analysis = await self.doc_analysis_repo.get_by_document(document.id)
@@ -230,6 +373,49 @@ class AnalysisService:
                     recommendations=doc_summary_dict["recommendations"],
                 )
                 self.session.add(doc_analysis)
+
+            # Final telemetry collation (Rule 6: NO sensitive document text is logged)
+            batch_telemetry = getattr(self.pipeline, "last_batch_telemetry", [])
+            summary_telemetry = getattr(self.pipeline, "last_summary_telemetry", {})
+            stage_retrieval = sum(b.get("retrieval_seconds", 0.0) for b in batch_telemetry)
+            total_limiter_wait = (
+                sum(b.get("rate_limiter_wait_seconds", 0.0) for b in batch_telemetry)
+                + summary_telemetry.get("rate_limiter_wait", 0.0)
+            )
+            total_time = time.perf_counter() - job_start_time
+
+            timing_summary = {
+                "stage_upload_seconds": round(stage_upload, 3),
+                "stage_extraction_seconds": round(stage_extraction, 3),
+                "stage_segmentation_seconds": round(stage_segmentation, 3),
+                "stage_embedding_seconds": round(stage_embedding, 3),
+                "stage_retrieval_seconds": round(stage_retrieval, 3),
+                "stage_llm_batches_seconds": round(stage_llm_batches, 3),
+                "stage_summary_seconds": round(stage_summary, 3),
+                "total_time_seconds": round(total_time, 3),
+                "total_rate_limiter_wait_seconds": round(total_limiter_wait, 3),
+                "batch_calls_count": len(batch_telemetry),
+            }
+
+            logger.info(
+                "analysis_job_stage_timing",
+                document_id=str(document_id),
+                clause_count=len(clauses),
+                **timing_summary,
+                llm_batches=batch_telemetry,
+                final_summary=summary_telemetry,
+            )
+
+            # Store timing metadata on document record
+            doc_for_meta = await self.document_repo.get_by_id(document_id)
+            if doc_for_meta:
+                meta = doc_for_meta.metadata_ or {}
+                meta["stage_timing"] = {
+                    **timing_summary,
+                    "llm_batches": batch_telemetry,
+                    "final_summary": summary_telemetry,
+                }
+                doc_for_meta.metadata_ = meta
 
             # Finalize
             await self.document_repo.update_status(document_id, "completed")

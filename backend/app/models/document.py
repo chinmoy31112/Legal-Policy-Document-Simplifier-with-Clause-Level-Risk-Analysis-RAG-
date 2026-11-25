@@ -37,7 +37,11 @@ class Document(Base, UUIDMixin, TimestampMixin):
         "Clause", back_populates="document", lazy="selectin", cascade="all, delete-orphan"
     )
     document_analysis = relationship(
-        "DocumentAnalysis", back_populates="document", uselist=False, cascade="all, delete-orphan"
+        "DocumentAnalysis",
+        back_populates="document",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
     analysis_results = relationship(
         "AnalysisResult",
@@ -46,6 +50,18 @@ class Document(Base, UUIDMixin, TimestampMixin):
         lazy="selectin",
         foreign_keys="AnalysisResult.document_id",
     )
+
+    @property
+    def overall_risk_score(self) -> int | None:
+        if self.document_analysis:
+            return self.document_analysis.overall_risk_score
+        return None
+
+    @property
+    def clause_count(self) -> int:
+        if self.clauses:
+            return len(self.clauses)
+        return 0
 
     def __repr__(self) -> str:
         return f"<Document(id={self.id}, filename={self.original_filename}, status={self.status})>"

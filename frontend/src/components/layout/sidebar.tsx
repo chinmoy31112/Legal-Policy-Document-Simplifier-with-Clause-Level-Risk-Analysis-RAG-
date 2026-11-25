@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   UploadCloud,
-  BookOpen,
   ShieldCheck,
   History,
   Settings,
@@ -26,16 +25,10 @@ export const NAVIGATION_ITEMS = [
     description: "Upload and analyze contracts",
   },
   {
-    name: "Knowledge Base",
-    href: "/documents?tab=kb",
-    icon: BookOpen,
-    description: "Standard clauses & benchmarks",
-  },
-  {
     name: "Analysis",
     href: "/analysis",
     icon: ShieldCheck,
-    description: "Interactive clause risk review",
+    description: "Clause risk evaluations & records",
   },
   {
     name: "History",
@@ -77,7 +70,7 @@ export function Sidebar() {
       {/* Brand Header */}
       <div className="flex h-16 shrink-0 items-center justify-between px-4 border-b border-[var(--border)] bg-[var(--card)]">
         <Link
-          href="/dashboard"
+          href="/upload"
           className="flex items-center gap-2.5 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-[10px] p-1"
           aria-label="LegalLens AI Home"
         >
@@ -112,17 +105,10 @@ export function Sidebar() {
         </div>
         <nav className="space-y-1" aria-label="Main Navigation">
           {NAVIGATION_ITEMS.map((item) => {
-            const isBaseDocuments = item.href === "/documents";
-            const isKbTab = item.href === "/documents?tab=kb";
-
-            let isActive = false;
-            if (isKbTab) {
-              isActive = pathname === "/documents";
-            } else if (isBaseDocuments) {
-              isActive = pathname === "/documents";
-            } else {
-              isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-            }
+            const isActive =
+              pathname === item.href ||
+              (item.href !== "/" && pathname.startsWith(`${item.href}/`)) ||
+              (item.href === "/documents" && (pathname === "/history" || pathname.startsWith("/history/")));
 
             return (
               <Link

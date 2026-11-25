@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useDocuments, useDeleteDocument } from "@/hooks/use-documents";
+import { apiClient } from "@/lib/api-client";
 import { StatusBadge } from "@/components/documents/status-badge";
 import {
   FileText,
@@ -14,24 +15,46 @@ import {
   Filter,
   AlertTriangle,
   Download,
-  BookOpen,
-  History,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { RiskChip } from "@/components/ui/risk-chip";
 
 function DocumentsContent() {
-  const searchParams = useSearchParams();
-  const initialTab = searchParams.get("tab") === "kb" ? "kb" : "history";
-  const [activeTab, setActiveTab] = useState<"history" | "kb">(initialTab);
   const [searchTerm, setSearchTerm] = useState("");
-  const [, startTransition] = useTransition();
+  const queryClient = useQueryClient();
 
   const { data, isLoading, isError } = useDocuments(1, 50);
   const deleteMutation = useDeleteDocument();
 
   const documents = data?.items || [];
+
+  const handlePrefetch = (docId: string) => {
+    queryClient.prefetchQuery({
+      queryKey: ['documents', docId],
+      queryFn: async () => {
+        const res = await apiClient.get(`/documents/${docId}`);
+        return res.data.data;
+      },
+      staleTime: 5 * 60 * 1000,
+    });
+    queryClient.prefetchQuery({
+      queryKey: ['analysis', docId, 'summary'],
+      queryFn: async () => {
+        const res = await apiClient.get(`/analysis/${docId}/summary`);
+        return res.data.data;
+      },
+      staleTime: 5 * 60 * 1000,
+    });
+    queryClient.prefetchQuery({
+      queryKey: ['analysis', docId, 'clauses'],
+      queryFn: async () => {
+        const res = await apiClient.get(`/analysis/${docId}/clauses`);
+        return res.data.data;
+      },
+      staleTime: 5 * 60 * 1000,
+    });
+  };
 
   const filteredDocs = documents.filter((doc) =>
     doc.original_filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -60,47 +83,24 @@ function DocumentsContent() {
   };
 
   return (
-    <div className="space-y-6 select-none max-w-6xl mx-auto">
+    <div className="space-y-6 select-none max-w-6xl mx-auto pb-10">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-2xl font-semibold text-[var(--foreground)] tracking-tight">
-            {activeTab === "kb" ? "Knowledge Base & Benchmarks" : "Document Repository"}
+          <h1 className="font-serif text-2xl sm:text-3xl font-semibold text-[var(--foreground)] tracking-tight">
+            Document History & Archive
           </h1>
-          <p className="text-xs text-[var(--muted-foreground)] mt-1">
-            {activeTab === "kb"
-              ? "Reference commercial clauses and standard baseline precedents for RAG retrieval"
-              : "Complete history of uploaded agreements, audited clauses, and risk metrics"}
+          <p className="text-xs sm:text-sm text-[var(--muted-foreground)] mt-1 max-w-2xl leading-relaxed">
+            Complete historical record of all uploaded agreements, clause extractions, risk ratings, and compliance audit exports.
           </p>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex items-center rounded-[10px] bg-[var(--soft-surface)] p-1 border border-[var(--border)] shrink-0">
-          <button
-            type="button"
-            onClick={() => startTransition(() => setActiveTab("history"))}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-xs font-medium transition-all ${
-              activeTab === "history"
-                ? "bg-[var(--card)] text-[var(--foreground)] font-semibold shadow-xs border border-[var(--border)]"
-                : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-            }`}
-          >
-            <History className="w-3.5 h-3.5" />
-            <span>Document History</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => startTransition(() => setActiveTab("kb"))}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-xs font-medium transition-all ${
-              activeTab === "kb"
-                ? "bg-[var(--card)] text-[var(--foreground)] font-semibold shadow-xs border border-[var(--border)]"
-                : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Knowledge Base</span>
-          </button>
-        </div>
+        <Link href="/upload">
+          <Button size="sm" className="shrink-0">
+            <UploadCloud className="w-3.5 h-3.5 mr-1" />
+            <span>Upload New Contract</span>
+          </Button>
+        </Link>
       </div>
 
       {/* Control Toolbar */}
@@ -120,16 +120,9 @@ function DocumentsContent() {
 
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[8px] bg-[var(--soft-surface)] border border-[var(--border)] text-xs font-medium text-[var(--muted-foreground)]">
             <Filter className="w-3 h-3 text-[var(--accent)]" />
-            <span>{filteredDocs.length} Documents</span>
+            <span>{filteredDocs.length} Total Records</span>
           </div>
         </div>
-
-        <Link href="/upload">
-          <Button size="sm" className="w-full sm:w-auto">
-            <UploadCloud className="w-3.5 h-3.5 mr-1" />
-            <span>Upload Contract</span>
-          </Button>
-        </Link>
       </div>
 
       {/* Documents Table */}
@@ -150,17 +143,17 @@ function DocumentsContent() {
               <FileText className="w-6 h-6" />
             </div>
             <h3 className="font-serif text-sm font-semibold text-[var(--foreground)] mb-1">
-              No Documents Found
+              No History Records Found
             </h3>
             <p className="text-xs text-[var(--muted-foreground)] max-w-sm mb-5 leading-relaxed">
               {searchTerm
                 ? `No agreements match "${searchTerm}". Try resetting your filter.`
-                : "Upload your first legal document to begin clause extraction and benchmark risk analysis."}
+                : "You haven't uploaded any documents yet. Upload your first contract to begin historical tracking."}
             </p>
             <Link href="/upload">
               <Button size="sm">
                 <UploadCloud className="w-3.5 h-3.5 mr-1" />
-                <span>Upload Document</span>
+                <span>Upload First Document</span>
               </Button>
             </Link>
           </div>
@@ -173,6 +166,7 @@ function DocumentsContent() {
                   <th className="py-3 px-5">Category</th>
                   <th className="py-3 px-5">Risk Rating</th>
                   <th className="py-3 px-5">Status</th>
+                  <th className="py-3 px-5">Upload Date</th>
                   <th className="py-3 px-5 text-right">Actions</th>
                 </tr>
               </thead>
@@ -201,12 +195,16 @@ function DocumentsContent() {
                           </span>
                         </div>
                       </td>
-                      <td className="py-3.5 px-5 text-[var(--muted-foreground)] capitalize">
-                        {doc.document_type.replace(/_/g, " ")}
+                      <td className="py-3.5 px-5 text-[var(--muted-foreground)]">
+                        {doc.document_type === "non_legal"
+                          ? "Non-Legal Document"
+                          : doc.document_type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
                       </td>
                       <td className="py-3.5 px-5">
                         {riskScore !== null && riskScore !== undefined ? (
                           <RiskChip category={riskCategory} score={riskScore} size="sm" />
+                        ) : doc.document_type === "non_legal" || doc.status === "completed" ? (
+                          <span className="text-[var(--muted-foreground)] text-[11px] font-medium">N/A (Non-Legal)</span>
                         ) : (
                           <span className="text-[var(--muted-foreground)] italic text-[11px]">Pending</span>
                         )}
@@ -214,11 +212,18 @@ function DocumentsContent() {
                       <td className="py-3.5 px-5">
                         <StatusBadge status={doc.status} />
                       </td>
+                      <td className="py-3.5 px-5 text-[var(--muted-foreground)]">
+                        {new Date(doc.created_at).toLocaleDateString()}
+                      </td>
                       <td className="py-3.5 px-5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          <Link href={`/analysis/${doc.id}`}>
+                          <Link
+                            href={`/analysis/${doc.id}`}
+                            onMouseEnter={() => handlePrefetch(doc.id)}
+                            onFocus={() => handlePrefetch(doc.id)}
+                          >
                             <Button variant="outline" size="sm" className="h-7 text-xs">
-                              <span>Open</span>
+                              <span>Review</span>
                               <ArrowRight className="w-3 h-3 ml-1" />
                             </Button>
                           </Link>
@@ -227,9 +232,9 @@ function DocumentsContent() {
                             <button
                               type="button"
                               onClick={() => handleExport(doc.id, "markdown")}
-                              aria-label={`Download Markdown export for ${doc.original_filename}`}
-                              title="Download Markdown Report"
-                              className="p-1.5 rounded-[8px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--soft-surface)] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]"
+                              className="p-1.5 rounded-[8px] hover:bg-[var(--soft-surface)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                              title="Export Markdown"
+                              aria-label="Export Markdown"
                             >
                               <Download className="w-3.5 h-3.5" />
                             </button>
@@ -238,13 +243,13 @@ function DocumentsContent() {
                           <button
                             type="button"
                             onClick={() => {
-                              if (window.confirm(`Are you sure you want to delete "${doc.original_filename}"? This action cannot be undone.`)) {
+                              if (window.confirm(`Are you sure you want to delete ${doc.original_filename}?`)) {
                                 deleteMutation.mutate(doc.id);
                               }
                             }}
-                            aria-label={`Delete ${doc.original_filename}`}
+                            className="p-1.5 rounded-[8px] hover:bg-[var(--risk-high-bg)] text-[var(--muted-foreground)] hover:text-[var(--risk-high-text)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                             title="Delete Document"
-                            className="p-1.5 rounded-[8px] text-[var(--muted-foreground)] hover:text-[var(--risk-high-text)] bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--risk-high-bg)] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]"
+                            aria-label="Delete Document"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -266,9 +271,8 @@ export default function DocumentsPage() {
   return (
     <Suspense
       fallback={
-        <div className="p-12 text-center text-xs text-[var(--muted-foreground)] space-y-2">
-          <div className="w-6 h-6 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin mx-auto" />
-          <p>Loading document repository...</p>
+        <div className="p-12 text-center text-xs text-[var(--muted-foreground)]">
+          Loading history repository...
         </div>
       }
     >

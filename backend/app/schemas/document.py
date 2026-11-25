@@ -21,6 +21,7 @@ class DocumentType(StrEnum):
     EMPLOYMENT_CONTRACT = "employment_contract"
     SERVICE_AGREEMENT = "service_agreement"
     LOAN_AGREEMENT = "loan_agreement"
+    COMMERCIAL_AGREEMENT = "commercial_agreement"
     EULA = "eula"
     OTHER = "other"
 
@@ -48,7 +49,7 @@ class DocumentUploadResponse(BaseModel):
     original_filename: str
     file_type: str
     file_size: int
-    document_type: DocumentType
+    document_type: str = "other"
     status: DocumentStatus
     created_at: datetime
 
@@ -60,7 +61,7 @@ class DocumentListItem(BaseModel):
 
     id: UUID
     original_filename: str
-    document_type: DocumentType
+    document_type: str = "other"
     status: DocumentStatus
     file_size: int
     is_scanned: bool = False
@@ -79,7 +80,7 @@ class DocumentDetail(BaseModel):
     filename: str
     file_type: str
     file_size: int
-    document_type: DocumentType
+    document_type: str = "other"
     status: DocumentStatus
     jurisdiction: str | None = None
     is_scanned: bool = False

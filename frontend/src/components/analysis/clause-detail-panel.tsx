@@ -8,7 +8,6 @@ import {
   AlertTriangle,
   Scale,
   Sparkles,
-  BookOpen,
   ChevronDown,
   ChevronUp,
   X,
@@ -55,11 +54,6 @@ export function ClauseDetailPanel({
       </div>
     );
   }
-
-  const retrievedClauses =
-    typeof clause.retrieved_clauses === "string"
-      ? JSON.parse(clause.retrieved_clauses)
-      : clause.retrieved_clauses || [];
 
   const clauseNumber =
     clause.clause?.clause_number ||
@@ -113,12 +107,12 @@ export function ClauseDetailPanel({
           </div>
         </div>
 
-        {/* Why it was flagged (Key Risk Factors) */}
+        {/* Key Risk Factors */}
         {clause.risk_reasons && clause.risk_reasons.length > 0 && (
           <div className="space-y-1.5">
             <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--risk-high-text)] flex items-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-              <span>Why It Was Flagged</span>
+              <span>Flagged</span>
             </h4>
             <div className="p-3.5 rounded-[10px] bg-[var(--risk-high-bg)] border border-[var(--risk-high-border)] text-xs text-[var(--risk-high-text)]">
               <ul className="space-y-1.5 list-disc list-inside">
@@ -161,47 +155,6 @@ export function ClauseDetailPanel({
             </div>
             <div className="p-3.5 rounded-[10px] bg-[var(--card)] border border-[var(--border)] text-xs text-[var(--foreground)] leading-relaxed italic border-l-3 border-l-[var(--accent)]">
               &ldquo;{clause.suggested_rewrite}&rdquo;
-            </div>
-          </div>
-        )}
-
-        {/* Grounded Benchmark Precedents */}
-        {retrievedClauses.length > 0 && (
-          <div className="space-y-1.5">
-            <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)] flex items-center gap-1.5">
-              <BookOpen className="w-3.5 h-3.5 shrink-0" />
-              <span>Similar Standard Clauses</span>
-            </h4>
-            <div className="space-y-2">
-              {retrievedClauses.map((ref: { id?: string; title?: string; similarity_score?: number; content?: string }, idx: number) => {
-                const similarityPct =
-                  ref.similarity_score !== undefined
-                    ? Math.round(ref.similarity_score * 100)
-                    : null;
-
-                return (
-                  <div
-                    key={idx}
-                    className="p-3 rounded-[10px] bg-[var(--soft-surface)] border border-[var(--border)] text-xs flex flex-col gap-1.5"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-[var(--foreground)] truncate">
-                        {ref.title || ref.id || "Standard Commercial Precedent"}
-                      </span>
-                      {similarityPct !== null && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] tabular-nums shrink-0">
-                          {similarityPct}% match
-                        </span>
-                      )}
-                    </div>
-                    {ref.content && (
-                      <p className="text-[11px] text-[var(--muted-foreground)] line-clamp-2 leading-relaxed">
-                        {ref.content}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
             </div>
           </div>
         )}

@@ -76,6 +76,18 @@ class ExportService:
                 "retrieved_references": ca.retrieved_clauses or [],
             })
 
+        score = doc_analysis.overall_risk_score if doc_analysis else None
+        if score is None:
+            risk_level = "NOT_APPLICABLE"
+        elif score >= 75:
+            risk_level = "CRITICAL"
+        elif score >= 50:
+            risk_level = "HIGH"
+        elif score >= 25:
+            risk_level = "MEDIUM"
+        else:
+            risk_level = "LOW"
+
         return {
             "document": {
                 "id": str(document.id),
@@ -87,8 +99,8 @@ class ExportService:
                 "status": document.status,
             },
             "risk_summary": {
-                "overall_risk_score": doc_analysis.overall_risk_score if doc_analysis else 0,
-                "overall_risk_level": "CRITICAL" if (doc_analysis and doc_analysis.overall_risk_score >= 75) else ("HIGH" if (doc_analysis and doc_analysis.overall_risk_score >= 50) else "LOW"),
+                "overall_risk_score": score,
+                "overall_risk_level": risk_level,
                 "executive_summary": doc_analysis.overall_summary if doc_analysis else "No analysis available.",
                 "category_breakdown": doc_analysis.risk_distribution if doc_analysis else {},
                 "negotiation_priorities": doc_analysis.top_risky_clauses if doc_analysis else [],
@@ -107,6 +119,9 @@ class ExportService:
         summary = data["risk_summary"]
         clauses = data["clauses"]
 
+        score_val = summary.get("overall_risk_score")
+        score_display = f"**{score_val}/100** ({summary['overall_risk_level']})" if score_val is not None else "**N/A** (Risk Scoring Skipped for Non-Legal Document)"
+
         md_lines = [
             f"# Legal Document Simplification & Risk Report: {doc['filename']}",
             "",
@@ -116,7 +131,7 @@ class ExportService:
             "",
             f"- **Document Type:** `{doc['document_type']}`",
             f"- **Jurisdiction:** `{doc['jurisdiction']}`",
-            f"- **Overall Risk Score:** **{summary['overall_risk_score']}/100** ({summary['overall_risk_level']})",
+            f"- **Overall Risk Score:** {score_display}",
             f"- **Total Clauses Analyzed:** {len(clauses)}",
             "",
             summary["executive_summary"],
@@ -136,7 +151,7 @@ class ExportService:
                     max_lvl = stats.get("max_risk_level", stats.get("max_risk", "-"))
                     md_lines.append(f"| {cat} | {count} | {avg_score} | `{max_lvl}` |")
         else:
-            md_lines.append("| General | " + str(len(clauses)) + " | " + str(summary['overall_risk_score']) + " | `LOW` |")
+            md_lines.append("| General | " + str(len(clauses)) + " | " + str(summary.get('overall_risk_score') or '-') + " | `LOW` |")
 
         # Negotiation Priorities
         priorities = summary.get("negotiation_priorities", [])

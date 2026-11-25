@@ -47,8 +47,8 @@ async def test_fake_llm_structured_output():
         risk_level="LOW",
         score=20,
     )
-    llm = FakeLLMClient(model_name="gemini-2.5-flash", canned_response=canned)
-    assert llm.model_name == "gemini-2.5-flash"
+    llm = FakeLLMClient(model_name="gemini-3.5-flash-lite", canned_response=canned)
+    assert llm.model_name == "gemini-3.5-flash-lite"
 
     result = await llm.generate_structured(
         prompt="Analyze this clause",

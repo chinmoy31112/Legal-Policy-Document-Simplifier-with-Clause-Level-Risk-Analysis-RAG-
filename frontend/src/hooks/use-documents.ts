@@ -12,10 +12,24 @@ export function useDocuments(page = 1, pageSize = 10) {
       });
       return response.data.data;
     },
+    refetchInterval: (query) => {
+      const items = query.state.data?.items;
+      const hasActive = items?.some(
+        (d) =>
+          d.status === 'uploaded' ||
+          d.status === 'extracting' ||
+          d.status === 'segmenting' ||
+          d.status === 'analyzing'
+      );
+      return hasActive ? 3000 : false;
+    },
+    refetchIntervalInBackground: true,
   });
 }
 
 export function useDocument(id: string) {
+  const queryClient = useQueryClient();
+
   return useQuery({
     queryKey: ['documents', id],
     queryFn: async () => {
@@ -23,15 +37,28 @@ export function useDocument(id: string) {
       return response.data.data;
     },
     enabled: !!id,
-    // Poll if status is uploading, extracting, segmenting, or analyzing
+    placeholderData: () => {
+      // Instantly hydrate from documents list cache if available
+      const queries = queryClient.getQueriesData<APIResponse<PaginatedResponse<Document>>>({
+        queryKey: ['documents'],
+      });
+      for (const [, queryData] of queries) {
+        const found = queryData?.data?.items?.find((d) => d.id === id);
+        if (found) return found;
+      }
+      return undefined;
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchIntervalInBackground: true,
+    retry: 3,
     refetchInterval: (query) => {
       const doc = query.state.data;
       if (
-        doc &&
-        (doc.status === 'uploaded' ||
-          doc.status === 'extracting' ||
-          doc.status === 'segmenting' ||
-          doc.status === 'analyzing')
+        !doc ||
+        doc.status === 'uploaded' ||
+        doc.status === 'extracting' ||
+        doc.status === 'segmenting' ||
+        doc.status === 'analyzing'
       ) {
         return 3000; // poll every 3 seconds
       }
@@ -69,7 +96,10 @@ export function useUploadDocument() {
         throw new Error(detail);
       }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data?.id) {
+        queryClient.setQueryData(['documents', data.id], data);
+      }
       queryClient.invalidateQueries({ queryKey: ['documents'] });
     },
   });

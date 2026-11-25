@@ -127,7 +127,7 @@ class GeminiEmbedder(Embedder):
             self._rate_limiter = get_model_rate_limiter(self._model_name, max_rpm=self._rpm)
         self._throttle = self._rate_limiter
         self._cache: dict[str, list[float]] = {}
-        self._offline_mode = force_offline or not bool(self.settings.google_api_key.strip())
+        self._offline_mode = force_offline or self.settings.app_env == "test" or not bool(self.settings.google_api_key.strip())
 
         if self._offline_mode:
             logger.info(

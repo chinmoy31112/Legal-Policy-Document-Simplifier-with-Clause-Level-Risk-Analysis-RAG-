@@ -24,7 +24,7 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       await login({ email, password });
-      router.push("/dashboard");
+      router.push("/upload");
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string; message?: string } }; message?: string };
       const detail =

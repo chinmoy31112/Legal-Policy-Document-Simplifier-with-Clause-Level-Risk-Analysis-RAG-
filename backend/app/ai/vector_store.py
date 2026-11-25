@@ -6,7 +6,9 @@ refuses to query on mismatch.
 Adheres to Rule 9: Vector store behind an abstract interface.
 """
 
+import json
 import math
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import text
@@ -23,12 +25,46 @@ class InMemoryVectorStore(VectorStore):
     """
     In-memory vector store computing exact cosine similarity.
     Enforces Rule 8 (refuses query on model/dimension mismatch).
+    Automatically loads cached benchmark reference clauses from disk when available.
     """
 
-    def __init__(self, expected_dim: int = 768, expected_model: str = "gemini-embedding-2"):
+    def __init__(
+        self,
+        expected_dim: int = 768,
+        expected_model: str = "gemini-embedding-2",
+        auto_load: bool = True,
+    ):
         self.expected_dim = expected_dim
         self.expected_model = expected_model
         self._records: dict[str, VectorRecord] = {}
+        if auto_load:
+            self._load_cached_reference_records()
+
+    def _load_cached_reference_records(self) -> None:
+        """Load pre-embedded reference clauses if available and not already loaded."""
+        if self._records:
+            return
+        cache_path = (
+            Path(__file__).resolve().parent.parent.parent
+            / "knowledge_base"
+            / "reference_clauses_embeddings.json"
+        )
+        if not cache_path.exists():
+            return
+        try:
+            raw = json.loads(cache_path.read_text(encoding="utf-8"))
+            for item in raw:
+                rec = VectorRecord(
+                    id=item["id"],
+                    vector=item["vector"],
+                    model_name=item.get("model_name", self.expected_model),
+                    dimension=item.get("dimension", self.expected_dim),
+                    metadata=item.get("metadata", {}),
+                )
+                self._records[rec.id] = rec
+            logger.info("loaded_cached_reference_clauses", count=len(self._records))
+        except Exception as e:
+            logger.warning("failed_loading_cached_reference_clauses", error=str(e))
 
     @property
     def dimension(self) -> int:
@@ -111,16 +147,33 @@ class InMemoryVectorStore(VectorStore):
             self._records.pop(vid, None)
 
 
+_shared_in_memory_store: InMemoryVectorStore | None = None
+
+
+def get_shared_in_memory_store(
+    expected_dim: int = 768, expected_model: str = "gemini-embedding-2"
+) -> InMemoryVectorStore:
+    """Return a shared singleton InMemoryVectorStore with cached reference records preloaded."""
+    global _shared_in_memory_store
+    if _shared_in_memory_store is None:
+        _shared_in_memory_store = InMemoryVectorStore(
+            expected_dim=expected_dim, expected_model=expected_model
+        )
+    return _shared_in_memory_store
+
+
 class PgVectorStore(VectorStore):
     """
     PostgreSQL vector store using the pgvector extension (ADR 001).
-    Falls back gracefully to InMemoryVectorStore when DB is offline or in lightweight mode.
+    Falls back gracefully to InMemoryVectorStore when DB is offline, pgvector is uninstalled, or in lightweight mode.
     """
+
+    _pgvector_available: bool | None = None
 
     def __init__(self, expected_dim: int = 768, expected_model: str = "gemini-embedding-2"):
         self.expected_dim = expected_dim
         self.expected_model = expected_model
-        self._fallback = InMemoryVectorStore(expected_dim, expected_model)
+        self._fallback = get_shared_in_memory_store(expected_dim, expected_model)
 
     async def add_vectors(self, records: list[VectorRecord]) -> None:
         # Update fallback store
@@ -144,43 +197,49 @@ class PgVectorStore(VectorStore):
             )
 
         # Try executing in PostgreSQL if available, otherwise use in-memory store
-        try:
-            async with async_session_factory() as session:
-                # Query table reference_clauses with pgvector cosine distance operator <=>
-                filter_clause = ""
-                params: dict[str, Any] = {"q_vec": str(query_vector), "limit": top_k}
-                if filters and "category" in filters and filters["category"]:
-                    filter_clause = "WHERE category = :cat"
-                    params["cat"] = filters["category"]
+        if PgVectorStore._pgvector_available is not False:
+            try:
+                async with async_session_factory() as session:
+                    # Query table reference_clauses with pgvector cosine distance operator <=>
+                    filter_clause = ""
+                    params: dict[str, Any] = {"q_vec": str(query_vector), "limit": top_k}
+                    if filters and "category" in filters and filters["category"]:
+                        filter_clause = "WHERE category = :cat"
+                        params["cat"] = filters["category"]
 
-                sql = f"""
-                    SELECT id, title, category, document_type, text, why_standard_or_risky,
-                           1 - (embedding <=> :q_vec::vector) as similarity
-                    FROM reference_clauses
-                    {filter_clause}
-                    ORDER BY embedding <=> :q_vec::vector
-                    LIMIT :limit
-                """
-                res = await session.execute(text(sql), params)
-                rows = res.fetchall()
-                if rows:
-                    return [
-                        RetrievalResult(
-                            id=row[0],
-                            score=round(float(row[6]), 4),
-                            metadata={
-                                "title": row[1],
-                                "category": row[2],
-                                "document_type": row[3],
-                                "text": row[4],
-                                "why_standard_or_risky": row[5],
-                            },
-                        )
-                        for row in rows
-                    ]
-        except Exception:
-            # Fallback to local in-memory store
-            pass
+                    sql = f"""
+                        SELECT id, title, category, document_type, text, why_standard_or_risky,
+                               1 - (embedding <=> :q_vec::vector) as similarity
+                        FROM reference_clauses
+                        {filter_clause}
+                        ORDER BY embedding <=> :q_vec::vector
+                        LIMIT :limit
+                    """
+                    res = await session.execute(text(sql), params)
+                    rows = res.fetchall()
+                    if rows:
+                        PgVectorStore._pgvector_available = True
+                        return [
+                            RetrievalResult(
+                                id=row[0],
+                                score=round(float(row[6]), 4),
+                                metadata={
+                                    "title": row[1],
+                                    "category": row[2],
+                                    "document_type": row[3],
+                                    "text": row[4],
+                                    "why_standard_or_risky": row[5],
+                                },
+                            )
+                            for row in rows
+                        ]
+            except Exception as exc:
+                if PgVectorStore._pgvector_available is None:
+                    logger.warning(
+                        "pgvector_unavailable_falling_back_to_in_memory",
+                        reason=str(exc)[:150],
+                    )
+                PgVectorStore._pgvector_available = False
 
         return await self._fallback.search(
             query_vector,
@@ -202,4 +261,4 @@ def get_vector_store(store_type: str | None = None) -> VectorStore:
 
     if st == "pgvector":
         return PgVectorStore(expected_dim=dim, expected_model=model)
-    return InMemoryVectorStore(expected_dim=dim, expected_model=model)
+    return get_shared_in_memory_store(expected_dim=dim, expected_model=model)

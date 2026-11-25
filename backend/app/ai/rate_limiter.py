@@ -189,7 +189,7 @@ return {1, 0, current_rpm + 1, current_tpm + req_tokens}
 
 class SharedModelRateLimiter:
     """
-    Shared rate limiter for a specific model (e.g. gemini-embedding-2 or gemini-2.5-flash).
+    Shared rate limiter for a specific model (e.g. gemini-embedding-2 or gemini-3.5-flash-lite).
     Features:
     - Shared Redis backend for multi-worker synchronization.
     - Automatic in-memory sliding window fallback if Redis is unavailable.

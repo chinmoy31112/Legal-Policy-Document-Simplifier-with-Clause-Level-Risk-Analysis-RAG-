@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   Loader2,
   LogOut,
-  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,37 +86,6 @@ export default function SettingsPage() {
           <div className="p-3.5 rounded-[10px] bg-[var(--soft-surface)] border border-[var(--border)] space-y-1">
             <span className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Email Address</span>
             <div className="text-xs font-medium text-[var(--foreground)]">{user?.email || "user@contract.ai"}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* AI Model & Quota Configuration */}
-      <div className="p-6 rounded-[18px] bg-[var(--card)] border border-[var(--border)] shadow-none space-y-5">
-        <div className="flex items-center gap-3 border-b border-[var(--border)] pb-4">
-          <div className="w-9 h-9 rounded-[10px] bg-[var(--soft-surface)] border border-[var(--border)] flex items-center justify-center text-[var(--accent)]">
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="font-serif text-base font-semibold text-[var(--foreground)]">AI Model & Pacing Specifications</h3>
-            <p className="text-xs text-[var(--muted-foreground)]">Deterministic Google Gemini configurations per Phase 0 ADRs</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-          <div className="p-3.5 rounded-[10px] bg-[var(--soft-surface)] border border-[var(--border)] space-y-1">
-            <span className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Clause Reasoner</span>
-            <div className="text-xs font-bold text-[var(--foreground)]">gemini-3.5-flash-lite</div>
-            <div className="text-[10px] text-[var(--muted-foreground)]">Throttled at 12 RPM / 400 RPD</div>
-          </div>
-          <div className="p-3.5 rounded-[10px] bg-[var(--soft-surface)] border border-[var(--border)] space-y-1">
-            <span className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Embedding Model</span>
-            <div className="text-xs font-bold text-[var(--foreground)]">gemini-embedding-2</div>
-            <div className="text-[10px] text-[var(--muted-foreground)]">768 dim • Hash Vector Cache</div>
-          </div>
-          <div className="p-3.5 rounded-[10px] bg-[var(--soft-surface)] border border-[var(--border)] space-y-1">
-            <span className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">RAG Vector Store</span>
-            <div className="text-xs font-bold text-[var(--foreground)]">PostgreSQL 16 + pgvector</div>
-            <div className="text-[10px] text-[var(--muted-foreground)]">200 benchmark reference clauses</div>
           </div>
         </div>
       </div>

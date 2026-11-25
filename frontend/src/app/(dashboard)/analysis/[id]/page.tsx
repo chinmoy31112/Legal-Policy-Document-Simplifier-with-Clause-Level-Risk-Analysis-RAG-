@@ -11,11 +11,14 @@ import {
   AlertCircle,
   Clock,
   FileText,
+  RefreshCw,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { AnalysisSummary } from "@/components/analysis/analysis-summary";
 import { ClauseDetailPanel } from "@/components/analysis/clause-detail-panel";
 import { DocumentViewer } from "@/components/pdf-viewer/viewer";
 import { Skeleton } from "@/components/ui/skeleton";
+import { pluralize } from "@/lib/utils";
 
 export default function AnalysisPage({
   params,
@@ -25,27 +28,27 @@ export default function AnalysisPage({
   const { id } = use(params);
   const [activeClauseId, setActiveClauseId] = useState<string | null>(null);
 
-  const { data: document, isLoading: docLoading, isError: docError } = useDocument(id);
-  const isReady = !!document && document.status === "completed";
-  const { data: summary, isLoading: summaryLoading } = useDocumentSummary(id, isReady);
-  const { data: clauses, isLoading: clausesLoading } = useClauseAnalyses(id, isReady);
+  const { data: document, isLoading: docLoading, isError: docError, refetch: refetchDoc } = useDocument(id);
+  const isAnalyzing = document?.status === "analyzing";
+  const isCompleted = document?.status === "completed";
 
-  // Loading skeleton state
-  if (docLoading) {
+  // Only fetch summary when document is completed to prevent 404 polling flicker while clauses are streaming
+  const { data: summary, isLoading: summaryLoading } = useDocumentSummary(id, isCompleted, false);
+  const { data: clauses, isLoading: clausesLoading } = useClauseAnalyses(id, !!id, isAnalyzing);
+
+  // Initial loading state: clean centered loader while document metadata is retrieved
+  if (docLoading && !document) {
     return (
-      <div className="space-y-6 animate-in fade-in duration-150">
-        <div className="flex items-center gap-4">
-          <Skeleton className="w-9 h-9" />
-          <div className="space-y-2">
-            <Skeleton className="w-48 h-6" />
-            <Skeleton className="w-24 h-4" />
-          </div>
+      <div className="p-12 text-center rounded-[18px] border border-[var(--border)] bg-[var(--card)] flex flex-col items-center justify-center min-h-[400px] animate-in fade-in duration-150 max-w-xl mx-auto my-12">
+        <div className="w-12 h-12 rounded-[14px] bg-[var(--soft-surface)] flex items-center justify-center mb-4 text-[var(--accent)]">
+          <Loader2 className="w-6 h-6 animate-spin" />
         </div>
-        <Skeleton className="w-full h-36" rounded="card" />
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[500px]">
-          <Skeleton className="lg:col-span-7 h-[550px]" rounded="card" />
-          <Skeleton className="lg:col-span-5 h-[550px]" rounded="card" />
-        </div>
+        <h2 className="font-serif text-base font-semibold text-[var(--foreground)] mb-1">
+          Loading Document...
+        </h2>
+        <p className="text-xs text-[var(--muted-foreground)] max-w-sm leading-relaxed">
+          Retrieving contract records and analysis status.
+        </p>
       </div>
     );
   }
@@ -101,7 +104,7 @@ export default function AnalysisPage({
               <span className="truncate max-w-md sm:max-w-xl">{document.original_filename}</span>
             </h1>
             <div className="flex items-center gap-2 mt-0.5 text-xs text-[var(--muted-foreground)]">
-              <span className="capitalize">{document.document_type.replace(/_/g, " ")}</span>
+              <span>{document.document_type === "non_legal" ? "Non-Legal Document" : document.document_type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</span>
               <span>•</span>
               <StatusBadge status={document.status} />
             </div>
@@ -109,8 +112,35 @@ export default function AnalysisPage({
         </div>
       </div>
 
-      {/* Processing / In-Progress State */}
-      {isProcessing ? (
+      {/* Non-Legal Document State */}
+      {document.document_type === "non_legal" ? (
+        <div className="space-y-6">
+          {summaryLoading ? (
+            <Skeleton className="w-full h-36" rounded="card" />
+          ) : summary ? (
+            <AnalysisSummary analysis={summary} documentId={id} />
+          ) : null}
+          <div className="p-8 text-center rounded-[18px] border border-[var(--border)] bg-[var(--card)] max-w-xl mx-auto space-y-4">
+            <div className="w-12 h-12 rounded-[14px] bg-[var(--soft-surface)] flex items-center justify-center mx-auto text-[var(--muted-foreground)]">
+              <FileText className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-serif text-base font-semibold text-[var(--foreground)]">
+                Contract Risk Scoring Skipped
+              </h3>
+              <p className="text-xs text-[var(--muted-foreground)] leading-relaxed">
+                This document was classified as non-legal material (such as technical documentation or a setup guide). The system intentionally skips clause risk scoring to prevent invented legal claims.
+              </p>
+            </div>
+            <Link href="/upload" className="inline-block">
+              <Button size="sm" className="text-xs">
+                <span>Upload a Legal Contract</span>
+              </Button>
+            </Link>
+          </div>
+        </div>
+      ) : isProcessing && (!clauses || clauses.length === 0) ? (
+        /* Early processing before first clauses stream in */
         <div className="p-12 text-center rounded-[18px] border border-[var(--border)] bg-[var(--card)] flex flex-col items-center justify-center min-h-[350px]">
           <div className="w-12 h-12 rounded-[14px] bg-[var(--soft-surface)] flex items-center justify-center mb-4 text-[var(--accent)]">
             <Loader2 className="w-6 h-6 animate-spin" />
@@ -121,6 +151,18 @@ export default function AnalysisPage({
           <p className="text-xs text-[var(--muted-foreground)] max-w-sm leading-relaxed">
             Extracting clauses, comparing against commercial benchmarks, and generating plain English simplifications. This view updates automatically.
           </p>
+          <div className="mt-5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => refetchDoc()}
+              className="text-xs h-8 gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Check Status</span>
+            </Button>
+          </div>
         </div>
       ) : document.status === "waiting for quota" ? (
         <div className="p-12 text-center rounded-[18px] border border-[var(--risk-unusual-border)] bg-[var(--risk-unusual-bg)] flex flex-col items-center justify-center min-h-[350px]">
@@ -154,18 +196,34 @@ export default function AnalysisPage({
         </div>
       ) : (
         <div className="space-y-6 flex-1 flex flex-col">
+          {/* Live In-Progress Streaming Banner */}
+          {isProcessing && (
+            <div className="p-3 px-4 rounded-[14px] border border-[var(--accent)]/30 bg-[var(--soft-surface)] flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5 text-[var(--foreground)]">
+                <Loader2 className="w-4 h-4 animate-spin text-[var(--accent)] shrink-0" />
+                <span className="font-semibold">Analysis in progress:</span>
+                <span className="text-[var(--muted-foreground)]">
+                  {clauses && clauses.length > 0
+                    ? `Live streaming active — ${pluralize(clauses.length, "clause")} analyzed so far.`
+                    : "Processing document..."}
+                </span>
+              </div>
+              <span className="text-[11px] font-mono text-[var(--muted-foreground)]">Auto-updating</span>
+            </div>
+          )}
+
           {/* Top Overall Risk Summary & Risk Count Chips */}
-          {summaryLoading ? (
-            <Skeleton className="w-full h-36" rounded="card" />
-          ) : summary ? (
+          {summary ? (
             <AnalysisSummary analysis={summary} documentId={id} />
+          ) : isCompleted && summaryLoading ? (
+            <Skeleton className="w-full h-36" rounded="card" />
           ) : null}
 
           {/* Two-Column Workspace: Viewer (Left) + Detail Panel (Right) */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-start min-h-[600px]">
             {/* Left Column: PDF Viewer with Clause List and Search */}
             <div className="lg:col-span-7 xl:col-span-7 h-[650px] lg:h-[750px]">
-              {clausesLoading ? (
+              {clausesLoading && !clauses ? (
                 <Skeleton className="w-full h-full" rounded="card" />
               ) : (
                 <DocumentViewer

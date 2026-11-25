@@ -6,12 +6,11 @@ import { useRouter } from "next/navigation";
 import {
   UploadCloud,
   File as FileIcon,
+  FileText,
   X,
   Loader2,
   AlertCircle,
   ShieldCheck,
-  Scale,
-  Sparkles,
   ArrowRight,
 } from "lucide-react";
 import { useUploadDocument } from "@/hooks/use-documents";
@@ -69,18 +68,6 @@ export default function UploadPage() {
         </p>
       </div>
 
-      {/* Statutory Legal Disclaimer Notice */}
-      <div
-        role="note"
-        aria-label="Legal Notice"
-        className="p-3.5 rounded-[14px] bg-[var(--soft-surface)] border border-[var(--border)] text-xs text-[var(--muted-foreground)] flex items-start gap-2.5"
-      >
-        <Scale className="w-4 h-4 text-[var(--accent)] shrink-0 mt-0.5" />
-        <p className="leading-relaxed">
-          <strong className="text-[var(--foreground)]">Information, not legal advice:</strong> This application simplifies agreements and benchmarks risk indicators for workflow assistance. It does not provide legal opinions or formal attorney counsel.
-        </p>
-      </div>
-
       {/* Upload Card Container */}
       <div className="p-6 sm:p-8 rounded-[18px] bg-[var(--card)] border border-[var(--border)] shadow-none space-y-6">
         {/* Document Classification Selectors */}
@@ -90,7 +77,7 @@ export default function UploadPage() {
               htmlFor="doc-type-select"
               className="text-xs font-semibold text-[var(--foreground)] flex items-center gap-1.5"
             >
-              <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <FileText className="w-3.5 h-3.5 text-[var(--accent)]" />
               <span>Document Category</span>
             </label>
             <select
