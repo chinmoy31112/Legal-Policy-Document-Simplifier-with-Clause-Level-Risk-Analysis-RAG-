@@ -5,7 +5,9 @@ import { motion } from "framer-motion";
 import {
   ArrowRight,
   FileText,
+  LayoutDashboard,
 } from "lucide-react";
+import { useAuth } from "@/providers/auth-provider";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 
@@ -15,6 +17,8 @@ const fadeInUp = {
 };
 
 export default function LandingPage() {
+  const { isAuthenticated, logout } = useAuth();
+
   return (
     <div className="min-h-screen relative overflow-hidden bg-[var(--background)] text-[var(--foreground)] font-sans select-none flex flex-col justify-between">
       {/* Navigation Header */}
@@ -31,16 +35,32 @@ export default function LandingPage() {
 
           <div className="flex items-center gap-2.5 sm:gap-3">
             <ThemeToggle />
-            <Link href="/login">
-              <Button variant="ghost" size="sm">
-                Sign In
-              </Button>
-            </Link>
-            <Link href="/register">
-              <Button size="sm">
-                Create Account
-              </Button>
-            </Link>
+            {isAuthenticated ? (
+              <div className="flex items-center gap-2">
+                <Link href="/upload">
+                  <Button size="sm" className="gap-1.5">
+                    <LayoutDashboard className="w-3.5 h-3.5" />
+                    <span>Go to App</span>
+                  </Button>
+                </Link>
+                <Button variant="ghost" size="sm" onClick={logout}>
+                  Sign Out
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Link href="/login">
+                  <Button variant="ghost" size="sm">
+                    Sign In
+                  </Button>
+                </Link>
+                <Link href="/register">
+                  <Button size="sm">
+                    Create Account
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         </nav>
       </header>
@@ -75,9 +95,9 @@ export default function LandingPage() {
               variants={fadeInUp}
               className="flex items-center justify-center pt-4"
             >
-              <Link href="/upload" className="w-full sm:w-auto">
+              <Link href={isAuthenticated ? "/upload" : "/login"} className="w-full sm:w-auto">
                 <Button size="lg" className="w-full sm:w-auto px-8">
-                  <span>Analyze Your Contract</span>
+                  <span>{isAuthenticated ? "Go to Dashboard" : "Analyze Your Contract"}</span>
                   <ArrowRight className="w-4 h-4 ml-1.5" />
                 </Button>
               </Link>

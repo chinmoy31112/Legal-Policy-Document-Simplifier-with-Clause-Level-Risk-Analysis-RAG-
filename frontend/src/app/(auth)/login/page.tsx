@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -11,12 +11,41 @@ import { Input } from "@/components/ui/input";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const [hasToken] = useState(() => {
+    if (typeof window !== "undefined") {
+      return !!localStorage.getItem("access_token");
+    }
+    return false;
+  });
+
+  // If already authenticated or token exists, immediately redirect to upload or intended destination
+  useEffect(() => {
+    if ((!authLoading && isAuthenticated) || hasToken) {
+      const target = typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("redirect") || "/upload"
+        : "/upload";
+      router.replace(target);
+    }
+  }, [authLoading, isAuthenticated, hasToken, router]);
+
+  // Prevent flash of login form while validating session or redirecting
+  if (authLoading || isAuthenticated || hasToken) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--background)] select-none">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-7 h-7 animate-spin text-[var(--accent)]" />
+          <p className="text-xs text-[var(--muted-foreground)]">Verifying session...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,7 +53,10 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       await login({ email, password });
-      router.push("/upload");
+      const target = typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("redirect") || "/upload"
+        : "/upload";
+      router.push(target);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string; message?: string } }; message?: string };
       const detail =

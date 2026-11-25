@@ -33,10 +33,10 @@ export function useClauseAnalyses(documentId: string, enabled: boolean = true, i
     enabled: !!documentId && enabled,
     retry: false,
     staleTime: 5 * 60 * 1000,
-    // Refetch every 5s while clauses aren't loaded yet, or while analyzing (to stream in new clauses)
+    // Refetch every 3s while clauses aren't loaded yet, or while analyzing (to stream in new clauses)
     refetchInterval: (query) => {
       if (isAnalyzing || (!query.state.data && !query.state.error)) {
-        return 5000;
+        return 3000;
       }
       return false;
     },

@@ -20,7 +20,7 @@ export default function UploadPage() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [docType, setDocType] = useState<string>("terms_and_conditions");
-  const [jurisdiction, setJurisdiction] = useState<string>("US");
+  const [jurisdiction, setJurisdiction] = useState<string>("GLOBAL");
 
   const uploadMutation = useUploadDocument();
 
@@ -111,11 +111,11 @@ export default function UploadPage() {
               value={jurisdiction}
               onChange={(e) => setJurisdiction(e.target.value)}
             >
+              <option value="GLOBAL">International / Multi-Jurisdictional</option>
               <option value="IN">India (Indian Contract Act / DPDP Act / Common Law)</option>
               <option value="US">United States (Federal & State Baseline)</option>
               <option value="EU">European Union (GDPR / Consumer Directives)</option>
               <option value="UK">United Kingdom (UK GDPR / Common Law)</option>
-              <option value="GLOBAL">International / Multi-Jurisdictional</option>
             </select>
           </div>
         </div>

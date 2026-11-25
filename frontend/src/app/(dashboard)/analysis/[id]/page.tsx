@@ -28,14 +28,14 @@ export default function AnalysisPage({
   const { id } = use(params);
   const [activeClauseId, setActiveClauseId] = useState<string | null>(null);
 
-  const { data: document, isLoading: docLoading, isError: docError, refetch: refetchDoc } = useDocument(id);
+  const { data: document, isLoading: docLoading, isError: docError, refetch: refetchDoc, isFetching: docFetching } = useDocument(id);
   const resumeMutation = useResumeDocument();
   const isAnalyzing = document?.status === "analyzing";
   const isCompleted = document?.status === "completed";
 
   // Only fetch summary when document is completed to prevent 404 polling flicker while clauses are streaming
   const { data: summary, isLoading: summaryLoading } = useDocumentSummary(id, isCompleted, false);
-  const { data: clauses, isLoading: clausesLoading } = useClauseAnalyses(id, !!id, isAnalyzing);
+  const { data: clauses, isLoading: clausesLoading, refetch: refetchClauses, isFetching: clausesFetching } = useClauseAnalyses(id, !!id, isAnalyzing);
 
   // Initial loading state: clean centered loader while document metadata is retrieved
   if (docLoading && !document) {
@@ -173,11 +173,12 @@ export default function AnalysisPage({
               type="button"
               variant="outline"
               size="sm"
+              disabled={docFetching}
               onClick={() => refetchDoc()}
               className="text-xs h-8 gap-1.5"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Check Status</span>
+              <RefreshCw className={`w-3.5 h-3.5 ${docFetching ? "animate-spin" : ""}`} />
+              <span>{docFetching ? "Checking..." : "Check Status"}</span>
             </Button>
           </div>
         </div>
@@ -217,11 +218,12 @@ export default function AnalysisPage({
               type="button"
               variant="outline"
               size="sm"
+              disabled={docFetching}
               onClick={() => refetchDoc()}
               className="text-xs h-8 gap-1.5"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Check Status</span>
+              <RefreshCw className={`w-3.5 h-3.5 ${docFetching ? "animate-spin" : ""}`} />
+              <span>{docFetching ? "Checking..." : "Check Status"}</span>
             </Button>
           </div>
           <p className="text-[11px] text-[var(--muted-foreground)] mt-4">
@@ -272,7 +274,7 @@ export default function AnalysisPage({
         <div className="space-y-6 flex-1 flex flex-col">
           {/* Live In-Progress Streaming Banner */}
           {isProcessing && (
-            <div className="p-3 px-4 rounded-[14px] border border-[var(--accent)]/30 bg-[var(--soft-surface)] flex items-center justify-between gap-3 text-xs">
+            <div className="p-3 px-4 rounded-[14px] border border-[var(--accent)]/30 bg-[var(--soft-surface)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2.5 text-[var(--foreground)]">
                 <Loader2 className="w-4 h-4 animate-spin text-[var(--accent)] shrink-0" />
                 <span className="font-semibold">Analysis in progress:</span>
@@ -282,7 +284,23 @@ export default function AnalysisPage({
                     : "Processing document..."}
                 </span>
               </div>
-              <span className="text-[11px] font-mono text-[var(--muted-foreground)]">Auto-updating</span>
+              <div className="flex items-center gap-2.5 self-end sm:self-auto shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    await Promise.all([refetchDoc(), refetchClauses()]);
+                  }}
+                  disabled={docFetching || clausesFetching}
+                  className="h-7 text-xs px-2.5 gap-1.5 bg-[var(--card)] hover:bg-[var(--soft-surface)] border-[var(--border)] transition-all"
+                  title="Check analysis progress and refresh newly analyzed clauses"
+                >
+                  <RefreshCw className={`w-3 h-3 ${docFetching || clausesFetching ? "animate-spin" : ""}`} />
+                  <span>{docFetching || clausesFetching ? "Checking..." : "Check Status"}</span>
+                </Button>
+                <span className="text-[11px] font-mono text-[var(--muted-foreground)] hidden md:inline">Auto-updating (3s)</span>
+              </div>
             </div>
           )}
 

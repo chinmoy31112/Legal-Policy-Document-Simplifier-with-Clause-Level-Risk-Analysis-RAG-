@@ -15,6 +15,7 @@ import {
   Filter,
   AlertTriangle,
   Download,
+  RefreshCw,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,7 @@ function DocumentsContent() {
   const [searchTerm, setSearchTerm] = useState("");
   const queryClient = useQueryClient();
 
-  const { data, isLoading, isError } = useDocuments(1, 50);
+  const { data, isLoading, isError, refetch, isFetching } = useDocuments(1, 50);
   const deleteMutation = useDeleteDocument();
 
   const documents = data?.items || [];
@@ -127,6 +128,19 @@ function DocumentsContent() {
             <Filter className="w-3 h-3 text-[var(--accent)]" />
             <span>{filteredDocs.length} Total Records</span>
           </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="h-8 text-xs gap-1.5 bg-[var(--soft-surface)] hover:bg-[var(--card)] border-[var(--border)] transition-colors"
+            title="Refresh document status"
+          >
+            <RefreshCw className={`w-3 h-3 ${isFetching ? "animate-spin" : ""}`} />
+            <span>{isFetching ? "Refreshing..." : "Check Status"}</span>
+          </Button>
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export default function RegisterPage() {
-  const { register } = useAuth();
+  const { register, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -18,6 +18,32 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const [hasToken] = useState(() => {
+    if (typeof window !== "undefined") {
+      return !!localStorage.getItem("access_token");
+    }
+    return false;
+  });
+
+  // If already authenticated or token exists, redirect to upload immediately
+  useEffect(() => {
+    if ((!authLoading && isAuthenticated) || hasToken) {
+      router.replace("/upload");
+    }
+  }, [authLoading, isAuthenticated, hasToken, router]);
+
+  // Prevent flash of registration form while validating session or redirecting
+  if (authLoading || isAuthenticated || hasToken) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--background)] select-none">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-7 h-7 animate-spin text-[var(--accent)]" />
+          <p className="text-xs text-[var(--muted-foreground)]">Verifying session...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
