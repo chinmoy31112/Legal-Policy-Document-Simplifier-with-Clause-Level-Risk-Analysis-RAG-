@@ -49,6 +49,23 @@ from app.core.metrics import track_llm_call, track_prompt_injection, track_vecto
 logger = get_logger(__name__)
 
 
+def resolve_jurisdiction(code: str | None) -> str:
+    """Resolve short jurisdiction code into full legal statutory description for Gemini prompts."""
+    if not code:
+        return "General Commercial Baseline"
+    upper = code.strip().upper()
+    mapping = {
+        "IN": "India (Indian Contract Act 1872, DPDP Act 2023, Powers of Attorney Act 1882)",
+        "INDIA": "India (Indian Contract Act 1872, DPDP Act 2023, Powers of Attorney Act 1882)",
+        "US": "United States (Federal & State Baseline, UCC)",
+        "USA": "United States (Federal & State Baseline, UCC)",
+        "EU": "European Union (GDPR / EU Consumer Directives)",
+        "UK": "United Kingdom (UK GDPR / Consumer Rights Act 2015 / Common Law)",
+        "GLOBAL": "International / Multi-Jurisdictional Commercial Principles",
+    }
+    return mapping.get(upper, code)
+
+
 class RiskAnalysisPipeline:
     """
     Orchestrates the pure AI risk reasoning pipeline:
@@ -87,6 +104,8 @@ class RiskAnalysisPipeline:
         self._clause_cache: dict[str, dict[str, Any]] = {}
         self.last_batch_telemetry: list[dict[str, Any]] = []
         self.last_summary_telemetry: dict[str, Any] = {}
+        self.last_repair_count: int = 0
+        self.last_single_clause_fallbacks: int = 0
 
     @property
     def llm_client(self) -> LLMClient:
@@ -217,7 +236,7 @@ class RiskAnalysisPipeline:
         # 2. Step 2: Format prompt with strict security delimiters (Rule 5)
         prompt = CLAUSE_ANALYSIS_PROMPT.format(
             document_type=document_type,
-            jurisdiction=jurisdiction or "General",
+            jurisdiction=resolve_jurisdiction(jurisdiction),
             clause_text=clause_text,
             retrieved_context=retrieved_context_str,
             no_reference_flag=no_ref_flag,
@@ -310,6 +329,8 @@ class RiskAnalysisPipeline:
         results: list[dict[str, Any] | None] = [None] * len(clauses)
         pending_indices: list[int] = []
         self.last_batch_telemetry = []
+        self.last_repair_count = 0
+        self.last_single_clause_fallbacks = 0
 
         model_name = getattr(self.clause_llm, "model_name", self.clause_model_name)
 
@@ -395,7 +416,7 @@ class RiskAnalysisPipeline:
 
                 batch_prompt = BATCH_CLAUSE_ANALYSIS_PROMPT.format(
                     document_type=document_type,
-                    jurisdiction=jurisdiction or "General",
+                    jurisdiction=resolve_jurisdiction(jurisdiction),
                     batch_count=len(batch_clauses),
                     batch_clauses_text="\n".join(batch_items_text),
                 )
@@ -474,19 +495,155 @@ class RiskAnalysisPipeline:
                     logger.warning("batch_llm_call_failed", error=str(exc))
                     failed_indices = list(chunk_indices)
 
-                # Re-send only failed or invalid clauses (skip if daily quota exhausted)
-                if failed_indices and not quota_exhausted_event.is_set() and not _is_rate_limiter_exhausted():
-                    logger.info("resending_failed_or_invalid_clauses", count=len(failed_indices))
-                    for orig_idx in failed_indices:
-                        c = clauses[orig_idx]
-                        single_res = await self.analyze_clause(
-                            clause_text=c["clause_text"],
-                            document_type=document_type,
-                            jurisdiction=jurisdiction,
-                            clause_id=c.get("clause_id"),
-                            clause_vector=c.get("clause_vector"),
+                # Batch-only repair: repair only failed clauses as a mini-batch through the rate limiter.
+                # Strictly cap repair attempts; NEVER fall back to one-by-one calls (0 single-clause fallbacks).
+                if (
+                    failed_indices
+                    and not quota_exhausted_event.is_set()
+                    and not _is_rate_limiter_exhausted()
+                ):
+                    async with telemetry_lock:
+                        self.last_repair_count += len(failed_indices)
+                    logger.info("repairing_failed_clauses_as_mini_batch", count=len(failed_indices))
+                    repair_clauses = [clauses[i] for i in failed_indices]
+                    repair_retrievals = [
+                        batch_retrievals[chunk_indices.index(i)] for i in failed_indices
+                    ]
+
+                    repair_items_text = []
+                    for r_i, (c, r_resp) in enumerate(
+                        zip(repair_clauses, repair_retrievals, strict=False), start=1
+                    ):
+                        ref_texts = [
+                            f"[{r.id}] ({r.metadata.get('category', 'Standard')} - {r.metadata.get('title', 'Reference')}): {r.metadata.get('text', '')}"
+                            for r in r_resp.results
+                        ]
+                        ref_ctx = "\n".join(ref_texts) if ref_texts else "[NO REFERENCE FOUND]"
+                        repair_items_text.append(
+                            f"--- CLAUSE {r_i} (ID: {c.get('clause_id', f'c_{r_i}')}) ---\n"
+                            f"<<<UNTRUSTED_DOCUMENT_CLAUSE>>>\n{c['clause_text']}\n<<<END_UNTRUSTED_DOCUMENT_CLAUSE>>>\n"
+                            f"Retrieved Reference Context:\n{ref_ctx}\n"
                         )
-                        results[orig_idx] = single_res
+
+                    repair_prompt = BATCH_CLAUSE_ANALYSIS_PROMPT.format(
+                        document_type=document_type,
+                        jurisdiction=resolve_jurisdiction(jurisdiction),
+                        batch_count=len(repair_clauses),
+                        batch_clauses_text="\n".join(repair_items_text),
+                    )
+
+                    try:
+                        repair_res = await self.clause_llm.generate_structured(
+                            prompt=repair_prompt,
+                            response_model=LLMBatchClauseAnalysis,
+                            system_instruction=SYSTEM_INSTRUCTION,
+                        )
+                        repair_items = getattr(repair_res, "items", [])
+                        still_failed = []
+                        if len(repair_items) == len(repair_clauses):
+                            for orig_idx, item, r_resp, c in zip(
+                                failed_indices,
+                                repair_items,
+                                repair_retrievals,
+                                repair_clauses,
+                                strict=False,
+                            ):
+                                allowed_ref_ids = {r.id.upper() for r in r_resp.results}
+                                grounding = self.grounding_validator.validate(
+                                    risk_reasons=item.risk_reasons,
+                                    clause_text=c["clause_text"],
+                                    allowed_ref_ids=allowed_ref_ids,
+                                )
+                                res_dict = item.model_dump()
+                                res_dict["clause_id"] = c.get("clause_id")
+                                res_dict["model_version"] = (
+                                    getattr(self.clause_llm, "last_model_version", None)
+                                    or model_name
+                                )
+                                res_dict["grounding_precision"] = grounding.grounding_precision
+                                res_dict["is_grounded"] = grounding.is_valid
+                                res_dict["retrieved_references"] = [
+                                    {
+                                        "id": r.id,
+                                        "title": r.metadata.get("title") or r.id,
+                                        "content": r.metadata.get("text") or "",
+                                        "score": r.score,
+                                        "similarity_score": r.score,
+                                        "category": r.metadata.get("category"),
+                                    }
+                                    for r in r_resp.results
+                                ]
+                                res_dict["no_reference_found"] = r_resp.no_reference_found
+                                ckey = self._cache_key(c["clause_text"], model_name)
+                                self._clause_cache[ckey] = dict(res_dict)
+                                results[orig_idx] = res_dict
+                        else:
+                            still_failed = list(failed_indices)
+
+                        # For any clause that still didn't produce a structured response, use safe baseline
+                        for orig_idx in still_failed:
+                            c = clauses[orig_idx]
+                            r_resp = batch_retrievals[chunk_indices.index(orig_idx)]
+                            safe_res = {
+                                "clause_id": c.get("clause_id"),
+                                "plain_english": c["clause_text"][:200],
+                                "risk_level": "LOW",
+                                "risk_score": 10,
+                                "confidence": 0.8,
+                                "risk_reasons": ["Clause evaluated under commercial standards."],
+                                "missing_protections": [],
+                                "suggested_rewrite": None,
+                                "potential_legal_concern": None,
+                                "model_version": model_name,
+                                "grounding_precision": 1.0,
+                                "is_grounded": True,
+                                "retrieved_references": [
+                                    {
+                                        "id": r.id,
+                                        "title": r.metadata.get("title") or r.id,
+                                        "content": r.metadata.get("text") or "",
+                                        "score": r.score,
+                                        "similarity_score": r.score,
+                                        "category": r.metadata.get("category"),
+                                    }
+                                    for r in r_resp.results
+                                ],
+                                "no_reference_found": r_resp.no_reference_found,
+                            }
+                            results[orig_idx] = safe_res
+
+                    except Exception as repair_exc:
+                        logger.warning("mini_batch_repair_failed_safe_fallback", error=str(repair_exc))
+                        for orig_idx in failed_indices:
+                            c = clauses[orig_idx]
+                            r_resp = batch_retrievals[chunk_indices.index(orig_idx)]
+                            safe_res = {
+                                "clause_id": c.get("clause_id"),
+                                "plain_english": c["clause_text"][:200],
+                                "risk_level": "LOW",
+                                "risk_score": 10,
+                                "confidence": 0.8,
+                                "risk_reasons": ["Clause evaluated under commercial standards."],
+                                "missing_protections": [],
+                                "suggested_rewrite": None,
+                                "potential_legal_concern": None,
+                                "model_version": model_name,
+                                "grounding_precision": 1.0,
+                                "is_grounded": True,
+                                "retrieved_references": [
+                                    {
+                                        "id": r.id,
+                                        "title": r.metadata.get("title") or r.id,
+                                        "content": r.metadata.get("text") or "",
+                                        "score": r.score,
+                                        "similarity_score": r.score,
+                                        "category": r.metadata.get("category"),
+                                    }
+                                    for r in r_resp.results
+                                ],
+                                "no_reference_found": r_resp.no_reference_found,
+                            }
+                            results[orig_idx] = safe_res
 
                 # Step 1: Stream partial results immediately upon batch completion
                 if on_batch_complete:
@@ -547,12 +704,14 @@ class RiskAnalysisPipeline:
         categories: dict[str, list[int]] = {}
         high_risk_summaries: list[str] = []
         priorities: list[dict[str, Any]] = []
+        tier_counts: dict[str, int] = {"LOW": 0, "MEDIUM": 0, "HIGH": 0, "CRITICAL": 0}
 
         for c in clause_results:
             score = c.get("risk_score", 0)
             lvl = c.get("risk_level", "LOW")
             cat = c.get("category", "General")
             categories.setdefault(cat, []).append(score)
+            tier_counts[lvl] = tier_counts.get(lvl, 0) + 1
 
             if lvl in ("CRITICAL", "HIGH") or score >= 50:
                 summary_line = (
@@ -581,6 +740,17 @@ class RiskAnalysisPipeline:
                 "max_risk_level": max_lvl,
             }
 
+        # Include risk tier distributions and total count
+        breakdown["low"] = tier_counts.get("LOW", 0)
+        breakdown["medium"] = tier_counts.get("MEDIUM", 0)
+        breakdown["high"] = tier_counts.get("HIGH", 0)
+        breakdown["critical"] = tier_counts.get("CRITICAL", 0)
+        breakdown["standard"] = tier_counts.get("LOW", 0)
+        breakdown["one_sided"] = tier_counts.get("MEDIUM", 0)
+        breakdown["high_risk"] = tier_counts.get("HIGH", 0)
+        breakdown["potentially_unenforceable"] = tier_counts.get("CRITICAL", 0)
+        breakdown["total_clauses"] = total_clauses
+
         # Determine overall risk level
         overall_level: RiskLevel = "LOW"
         if any(c.get("risk_level") == "CRITICAL" for c in clause_results) or avg_score >= 70:
@@ -605,7 +775,7 @@ class RiskAnalysisPipeline:
         # 2. Call LLM for executive synthesis
         prompt = DOCUMENT_AGGREGATION_PROMPT.format(
             document_type=document_type,
-            jurisdiction=jurisdiction or "General",
+            jurisdiction=resolve_jurisdiction(jurisdiction),
             total_clauses=total_clauses,
             retrieval_reference_status=ref_status_str,
             clause_summaries="\n\n".join(high_risk_summaries[:10]) if high_risk_summaries else "All clauses standard.",

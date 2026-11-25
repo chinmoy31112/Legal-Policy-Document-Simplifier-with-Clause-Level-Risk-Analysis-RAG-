@@ -47,16 +47,19 @@ MAX_REPAIR_RETRIES = 2
 def is_daily_quota_error(err_str: str) -> bool:
     """
     Detect whether an error specifically indicates daily quota exhaustion (RPD)
-    by checking for metric names and per-day quota violations, rather than transient RPM bursts.
+    by checking for explicit per-day quota IDs and descriptions.
+
+    Crucially, generic metric names like 'generate_content_free_tier_requests'
+    are shared by both per-minute and per-day quotas and MUST NOT be used alone.
+    The quota ID (e.g. GenerateRequestsPerDay...) and explicit per-day descriptions
+    are the deciding signal.
     """
     norm = err_str.lower()
     daily_quota_indicators = [
-        "generate_content_free_tier_requests",
         "generaterequestsperday",
         "requests per day",
         "perday",
         "per_day",
-        "free_tier_requests",
         "day limit exceeded",
         "daily quota",
         "daily request",
@@ -371,6 +374,7 @@ class GeminiLLMClient(LLMClient):
                 }
                 self.last_model_version = getattr(response, "model_version", None) or self._model_name
                 await self._rate_limiter.circuit_breaker.record_success()
+                self._rate_limiter.record_success()
                 return response.text or ""
             except Exception as exc:
                 api_retries += 1
@@ -400,7 +404,7 @@ class GeminiLLMClient(LLMClient):
                         r"'retryDelay':\s*'(\d+)s'", err_str
                     )
                     raw_delay = float(match.group(1)) if match else (2.0 * rate_attempt + 1.0)
-                    retry_delay = min(max(raw_delay, 2.0), 5.0) + 0.5
+                    retry_delay = min(raw_delay, 5.0)
                     await self._rate_limiter.circuit_breaker.record_failure(
                         retry_after=retry_delay
                     )

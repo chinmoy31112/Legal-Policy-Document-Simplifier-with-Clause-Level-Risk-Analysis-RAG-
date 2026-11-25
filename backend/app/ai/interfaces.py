@@ -10,7 +10,7 @@ Strictly follows Phase 1 requirements:
 import hashlib
 import math
 from abc import ABC, abstractmethod
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from pydantic import BaseModel, Field
 
@@ -178,6 +178,21 @@ class FakeLLMClient(LLMClient):
             return response_model.model_validate(self.canned_response)
 
         # Default fallback: construct a minimal instance
+        if response_model.__name__ == "LLMBatchClauseAnalysis":
+            count = prompt.count("<<<UNTRUSTED_DOCUMENT_CLAUSE>>>") or 1
+            from app.ai.response_parser import LLMClauseAnalysis
+            sample_items = [
+                LLMClauseAnalysis.model_validate({
+                    "plain_english": "Plain summary of clause provisions.",
+                    "risk_level": "LOW",
+                    "risk_score": 15,
+                    "confidence": 0.95,
+                    "risk_reasons": ["Grounded in baseline contract terms."],
+                })
+                for _ in range(count)
+            ]
+            return cast(T, response_model(items=sample_items))
+
         try:
             return response_model()  # type: ignore
         except Exception:

@@ -40,9 +40,19 @@ async def test_20_concurrent_documents_stress_with_simulated_429():
     total_docs = 20
     clauses_per_doc = 3
 
-    # Set up fast test limiters against a simulated 100 RPM limit
-    embed_limiter = SharedModelRateLimiter(model_name="stress-embed-100", max_rpm=100, min_interval=0.0)
-    llm_limiter = SharedModelRateLimiter(model_name="stress-llm-100", max_rpm=100, min_interval=0.0)
+    # Set up fast test limiters against a simulated RPM/TPM limit
+    embed_limiter = SharedModelRateLimiter(
+        model_name="stress-embed-100", max_rpm=1000, max_tpm=10_000_000, min_interval=0.0
+    )
+    llm_limiter = SharedModelRateLimiter(
+        model_name="stress-llm-100", max_rpm=1000, max_tpm=10_000_000, min_interval=0.0
+    )
+    embed_limiter._redis_available = False
+    llm_limiter._redis_available = False
+    embed_limiter.circuit_breaker.failure_threshold = 100
+    llm_limiter.circuit_breaker.failure_threshold = 100
+    embed_limiter.circuit_breaker.recovery_timeout = 0.01
+    llm_limiter.circuit_breaker.recovery_timeout = 0.01
 
     # Set up pipeline with in-memory vector store
     embedder = GeminiEmbedder(force_offline=False)
@@ -161,6 +171,8 @@ async def test_20_concurrent_documents_stress_with_simulated_429():
 
     # Execute all 20 documents concurrently under 429 stress
     with patch("app.ai.llm.calculate_jittered_backoff", return_value=0.01), patch(
+        "app.ai.embedding.calculate_jittered_backoff", return_value=0.01
+    ), patch(
         "tenacity.wait_exponential.__call__", return_value=0.01
     ):
         results = await asyncio.gather(*[

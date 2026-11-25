@@ -231,17 +231,37 @@ class SharedModelRateLimiter:
         self._daily_counts: dict[str, int] = {}
         self._last_dispatch_time: float = 0.0
         self._daily_quota_exhausted: bool = False
+        self._daily_quota_date: str | None = None
         self._daily_quota_notice: str | None = None
         self._lock = asyncio.Lock()
 
     @property
     def is_daily_quota_exhausted(self) -> bool:
-        """Return True if daily quota is marked exhausted across concurrent tasks."""
-        return self._daily_quota_exhausted
+        """
+        Check if daily quota is marked exhausted across concurrent tasks.
+        Automatically expires and resets when the UTC day changes.
+        """
+        if not self._daily_quota_exhausted:
+            return False
+
+        from datetime import datetime, timezone
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        if self._daily_quota_date and self._daily_quota_date != today_str:
+            # Midnight UTC reset has passed: auto-expire the flag
+            logger.info("shared_rate_limiter_daily_quota_flag_auto_expired", model=self.model_name)
+            self._daily_quota_exhausted = False
+            self._daily_quota_date = None
+            self._daily_quota_notice = None
+            return False
+
+        return True
 
     def mark_daily_quota_exhausted(self, notice: str | None = None) -> None:
         """Atomically mark daily quota exhausted across all concurrent tasks sharing this limiter."""
+        from datetime import datetime, timezone
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         self._daily_quota_exhausted = True
+        self._daily_quota_date = today_str
         self._daily_quota_notice = (
             notice or f"Daily API quota reached for model '{self.model_name}'. Resumes after daily quota reset."
         )
@@ -251,9 +271,18 @@ class SharedModelRateLimiter:
             notice=self._daily_quota_notice,
         )
 
+    def record_success(self) -> None:
+        """Clear any residual daily quota exhausted state upon confirmed successful API call."""
+        if self._daily_quota_exhausted:
+            logger.info("shared_rate_limiter_daily_quota_cleared_on_success", model=self.model_name)
+            self._daily_quota_exhausted = False
+            self._daily_quota_date = None
+            self._daily_quota_notice = None
+
     def reset_daily_quota_exhausted(self) -> None:
-        """Reset the shared daily quota exhausted flag."""
+        """Manually reset the shared daily quota exhausted flag."""
         self._daily_quota_exhausted = False
+        self._daily_quota_date = None
         self._daily_quota_notice = None
 
     def _seconds_until_midnight_utc(self) -> float:

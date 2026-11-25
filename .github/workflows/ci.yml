@@ -59,6 +59,14 @@ jobs:
         run: |
           mypy backend/app --ignore-missing-imports
 
+      - name: Run Database Migrations
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/legal_simplifier
+          APP_ENV: test
+        run: |
+          cd backend
+          alembic upgrade head
+
       - name: Run Backend Tests
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/legal_simplifier

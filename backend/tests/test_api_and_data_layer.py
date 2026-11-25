@@ -333,9 +333,18 @@ async def test_per_user_data_isolation(client: AsyncClient):
     res_ana = await client.get(f"/api/v1/documents/{doc_id}/analysis", headers=header_b)
     assert res_ana.status_code == 404
 
+    # User A can export PDF
+    res_exp_pdf_a = await client.get(f"/api/v1/documents/{doc_id}/export/pdf", headers={"Authorization": f"Bearer {token_a}"})
+    assert res_exp_pdf_a.status_code == 200
+    assert "application/pdf" in res_exp_pdf_a.headers.get("content-type", "")
+    assert res_exp_pdf_a.content.startswith(b"%PDF")
+
     # User B attempts to export User A's document
     res_exp = await client.get(f"/api/v1/documents/{doc_id}/export/json", headers=header_b)
     assert res_exp.status_code == 404
+
+    res_exp_pdf = await client.get(f"/api/v1/documents/{doc_id}/export/pdf", headers=header_b)
+    assert res_exp_pdf.status_code == 404
 
     # User B attempts to delete User A's document
     res_del = await client.delete(f"/api/v1/documents/{doc_id}", headers=header_b)

@@ -54,9 +54,103 @@ def test_is_daily_quota_error_detection():
     transient_rpm_2 = "503 The model is temporarily overloaded. retryDelay: '3s'"
     transient_rpm_3 = "RESOURCE_EXHAUSTED: Per-minute request quota exhausted. retry in 1.2s"
 
+    # Crucial discriminator test: Google's shared metric name with per-minute quota ID MUST NOT trip daily flag
+    transient_rpm_shared_metric_1 = (
+        "429 RESOURCE_EXHAUSTED. Quota exceeded for metric: "
+        "generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 15, "
+        "model: gemini-3.5-flash-lite, quotaId: GenerateRequestsPerMinutePerProjectPerModel-FreeTier, "
+        "description: Generate content requests per minute limit exceeded on Free Tier. "
+        "Please retry in 2.5s."
+    )
+    transient_rpm_shared_metric_2 = (
+        "QuotaFailure: violations: [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', "
+        "'quotaId': 'GenerateRequestsPerMinutePerProjectPerModel-FreeTier'}]"
+    )
+
     assert is_daily_quota_error(transient_rpm_1) is False
     assert is_daily_quota_error(transient_rpm_2) is False
     assert is_daily_quota_error(transient_rpm_3) is False
+    assert is_daily_quota_error(transient_rpm_shared_metric_1) is False
+    assert is_daily_quota_error(transient_rpm_shared_metric_2) is False
+
+
+@pytest.mark.asyncio
+async def test_per_minute_429_with_free_tier_metric_retries_and_succeeds():
+    """
+    Verify that an incoming 429 containing the shared 'generate_content_free_tier_requests' metric
+    along with a per-minute quotaId retries for a few seconds and succeeds, without fast-failing
+    or tripping the daily quota exhausted flag.
+    """
+    client = GeminiLLMClient(force_offline=False)
+    client._force_offline = False
+    client._rate_limiter._redis_available = False
+    client._rate_limiter.reset_daily_quota_exhausted()
+
+    rpm_429_error = (
+        "429 RESOURCE_EXHAUSTED. Quota exceeded for metric: "
+        "generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 15, "
+        "model: gemini-3.5-flash-lite, quotaId: GenerateRequestsPerMinutePerProjectPerModel-FreeTier, "
+        "description: Generate content requests per minute limit exceeded. Please retry in 0.05s."
+    )
+
+    call_count = 0
+    from unittest.mock import MagicMock
+
+    async def mock_generate_content(*args: Any, **kwargs: Any) -> Any:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise Exception(rpm_429_error)
+        resp = MagicMock()
+        resp.text = '{"status": "ok"}'
+        return resp
+
+    mock_client = MagicMock()
+    mock_client.aio.models.generate_content = AsyncMock(side_effect=mock_generate_content)
+    client._client = mock_client
+
+    result = await client._call_content_api(
+        contents="Test prompt",
+        sys_inst="Test sys inst",
+        response_mime_type="application/json",
+    )
+
+    # Must retry and return the valid response
+    assert result == '{"status": "ok"}'
+    assert call_count == 2
+    # The daily quota flag MUST NOT have been tripped
+    assert client._rate_limiter.is_daily_quota_exhausted is False
+
+
+@pytest.mark.asyncio
+async def test_shared_quota_flag_auto_expires_and_clears_on_success():
+    """Verify shared quota flag auto-expires on day change and clears on confirmed success."""
+    limiter = SharedModelRateLimiter(
+        model_name="test-expiry-model",
+        max_rpm=10,
+        max_tpm=1000,
+        max_rpd=100,
+    )
+    limiter._redis_available = False
+
+    # 1. Mark exhausted on a prior date
+    limiter.mark_daily_quota_exhausted(notice="Yesterday's quota limit reached")
+    assert limiter._daily_quota_exhausted is True
+    limiter._daily_quota_date = "2020-01-01"
+
+    # Accessing property auto-detects date change and expires the flag
+    assert limiter.is_daily_quota_exhausted is False
+    assert limiter._daily_quota_exhausted is False
+    assert limiter._daily_quota_date is None
+
+    # 2. Mark exhausted today
+    limiter.mark_daily_quota_exhausted(notice="Today's quota limit reached")
+    assert limiter.is_daily_quota_exhausted is True
+
+    # 3. Confirmed successful call calls record_success() and clears the flag
+    limiter.record_success()
+    assert limiter.is_daily_quota_exhausted is False
+    assert limiter._daily_quota_exhausted is False
 
 
 @pytest.mark.asyncio

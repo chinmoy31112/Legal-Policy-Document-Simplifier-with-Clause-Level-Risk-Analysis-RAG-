@@ -13,10 +13,37 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from app.core.database import engine
+import app.models  # noqa: F401
+from app.core.database import Base, engine
 from app.main import create_app
 
 fastapi_app = create_app()
+
+_tables_initialized = False
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def ensure_tables_exist():
+    """Ensure database schema and tables exist before tests run."""
+    global _tables_initialized
+    if not _tables_initialized:
+        try:
+            import asyncio
+            from sqlalchemy import text
+
+            async def _init():
+                async with engine.begin() as conn:
+                    try:
+                        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+                    except Exception:
+                        pass
+                    await conn.run_sync(Base.metadata.create_all)
+
+            await asyncio.wait_for(_init(), timeout=1.0)
+            _tables_initialized = True
+        except Exception:
+            pass
+    yield
 
 
 @pytest.fixture(autouse=True)
@@ -26,7 +53,8 @@ def cleanup_database_and_redis():
         import redis
 
         from app.core.config import get_settings
-        r = redis.from_url(get_settings().redis_url, socket_connect_timeout=0.5)
+        r = redis.from_url(get_settings().redis_url, socket_connect_timeout=0.1, socket_timeout=0.1)
+        r.ping()
         keys = r.keys("embedcache:*") + r.keys("ratelimit:*") + r.keys("user_quota:*")
         if keys:
             r.delete(*keys)
@@ -42,7 +70,8 @@ def cleanup_database_and_redis():
         import redis
 
         from app.core.config import get_settings
-        r = redis.from_url(get_settings().redis_url, socket_connect_timeout=0.5)
+        r = redis.from_url(get_settings().redis_url, socket_connect_timeout=0.1, socket_timeout=0.1)
+        r.ping()
         keys = r.keys("embedcache:*") + r.keys("ratelimit:*") + r.keys("user_quota:*")
         if keys:
             r.delete(*keys)

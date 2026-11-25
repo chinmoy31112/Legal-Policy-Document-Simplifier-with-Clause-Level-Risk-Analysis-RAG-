@@ -61,19 +61,24 @@ function DocumentsContent() {
     doc.document_type.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleExport = (docId: string, format: "json" | "markdown") => {
+  const handleExport = (docId: string, format: "json" | "markdown" | "pdf", filename?: string) => {
     const url = `${API_BASE_URL}/documents/${docId}/export/${format}`;
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
     fetch(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
-      .then((res) => res.blob())
+      .then((res) => {
+        if (!res.ok) throw new Error("Export download failed");
+        return res.blob();
+      })
       .then((blob) => {
         const downloadUrl = window.URL.createObjectURL(blob);
         const a = window.document.createElement("a");
         a.href = downloadUrl;
-        a.download = `contract_analysis.${format === "json" ? "json" : "md"}`;
+        const ext = format === "json" ? "json" : format === "pdf" ? "pdf" : "md";
+        const cleanName = filename ? filename.replace(/\.[^/.]+$/, "") : "contract_analysis";
+        a.download = `${cleanName}_risk_analysis.${ext}`;
         window.document.body.appendChild(a);
         a.click();
         a.remove();
@@ -231,10 +236,10 @@ function DocumentsContent() {
                           {doc.status === "completed" && (
                             <button
                               type="button"
-                              onClick={() => handleExport(doc.id, "markdown")}
-                              className="p-1.5 rounded-[8px] hover:bg-[var(--soft-surface)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-                              title="Export Markdown"
-                              aria-label="Export Markdown"
+                              onClick={() => handleExport(doc.id, "pdf", doc.original_filename)}
+                              className="p-1.5 rounded-[8px] hover:bg-[var(--soft-surface)] text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                              title="Download PDF Risk Report"
+                              aria-label="Download PDF Risk Report"
                             >
                               <Download className="w-3.5 h-3.5" />
                             </button>

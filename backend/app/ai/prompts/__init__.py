@@ -35,7 +35,15 @@ NON-NEGOTIABLE SECURITY & OPERATIONAL RULES:
    When retrieved reference clauses are provided, benchmark the target clause against them.
    If '[NO REFERENCE FOUND]' is indicated, assess risk conservatively based on baseline commercial fairness and increase uncertainty.
 
-5. OUTPUT FORMAT:
+5. JURISDICTIONAL AWARENESS:
+   Evaluate legal risks, missing protections, and potential concerns tailored to the declared jurisdiction:
+   - India (IN): Apply the Indian Contract Act 1872 (e.g. Section 27 restraint of trade voidness, Section 28 restriction on legal proceedings, Section 73/74 damages), Digital Personal Data Protection Act 2023 (DPDP Act), Consumer Protection Act 2019, and the Powers of Attorney Act 1882 / Registration Act for authorization deeds.
+   - United States (US): Apply Federal / State common law, UCC baseline, and standard commercial reciprocity.
+   - European Union (EU): Apply GDPR data subject rights, EU Unfair Terms Directive (93/13/EEC), and statutory cancellation rights.
+   - United Kingdom (UK): Apply UK GDPR, Consumer Rights Act 2015 reasonableness standards, and English common law.
+   - International (GLOBAL): Apply UNIDROIT Principles of International Commercial Contracts and cross-border commercial equity.
+
+6. OUTPUT FORMAT:
    Return strictly valid JSON conforming to the requested schema. No conversational chatter or markdown fences outside the JSON.
 """
 

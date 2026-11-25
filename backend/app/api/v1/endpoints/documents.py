@@ -7,10 +7,22 @@ Handles document upload, listing, detail retrieval, and deletion.
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.rate_limiter import get_model_rate_limiter
 from app.api.v1.deps import get_current_user_id, get_pagination
+from app.core.config import get_settings
 from app.core.database import async_session_factory
 from app.dependencies import get_db_session
 from app.schemas.analysis import (
@@ -195,6 +207,53 @@ async def get_document_status(
     )
 
 
+@router.post(
+    "/{document_id}/resume",
+    response_model=APIResponse[AnalysisStatusResponse],
+    summary="Resume document analysis",
+    description="Resume processing a document that paused due to daily quota exhaustion or transient interruption.",
+)
+async def resume_document_analysis(
+    document_id: UUID,
+    background_tasks: BackgroundTasks,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
+    """Resume analysis for a document in 'waiting for quota' or 'failed' status."""
+    service = DocumentService(session)
+    document = await service.get_document(document_id, user_id)
+
+    if document.status not in ["waiting for quota", "failed"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot resume document in '{document.status}' status. Only 'waiting for quota' or 'failed' can be resumed.",
+        )
+
+    # Reset any rate limiter daily exhausted flag for the models
+    settings = get_settings()
+    get_model_rate_limiter(settings.gemini_clause_model).reset_daily_quota_exhausted()
+    get_model_rate_limiter(settings.gemini_summary_model).reset_daily_quota_exhausted()
+
+    # Update document status back to analyzing
+    analysis_service = AnalysisService(session)
+    await analysis_service.document_repo.update_status(document_id, "analyzing")
+    await session.commit()
+
+    # Enqueue background task (AnalysisService safely skips already completed clauses)
+    background_tasks.add_task(run_analysis_background, document_id)
+
+    return APIResponse(
+        data=AnalysisStatusResponse(
+            document_id=document.id,
+            status="analyzing",
+            progress=0.75,
+            current_step="Resuming analysis of remaining clauses",
+            message="Analysis resumed successfully.",
+        ),
+        message="Document analysis resumed.",
+    )
+
+
 @router.get(
     "/{document_id}/clauses",
     response_model=APIResponse[list[ClauseAnalysisResponse]],
@@ -275,5 +334,28 @@ async def export_document_markdown(
     return Response(
         content=md_content,
         media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
+    "/{document_id}/export/pdf",
+    summary="Export document analysis as PDF",
+    description="Download formatted PDF risk analysis report for this document.",
+)
+async def export_document_pdf(
+    document_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
+    """Export document analysis as PDF."""
+    from fastapi import Response
+    service = ExportService(session)
+    pdf_bytes = await service.export_pdf(document_id, user_id)
+    doc = await service._get_authorized_document(document_id, user_id)
+    filename = f"{doc.original_filename}_risk_analysis.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

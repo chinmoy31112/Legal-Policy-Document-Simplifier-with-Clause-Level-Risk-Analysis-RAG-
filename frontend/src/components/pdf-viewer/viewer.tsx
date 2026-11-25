@@ -130,106 +130,116 @@ export function DocumentViewer({
         </div>
       </div>
 
-      {/* Document Canvas Container: Light Paper Background Guaranteed In Dark Mode */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[#EBE5DA] dark:bg-[#070A12] transition-colors">
-        {/* Paper Sheet */}
-        <div className="max-w-3xl mx-auto rounded-[12px] bg-[#FFFFFF] text-[#1A1A1A] p-6 sm:p-8 md:p-10 shadow-md border border-[#DDD6C8] pdf-canvas-container select-text">
-          {/* Paper Title / Header */}
-          <div className="border-b border-[#E5E0D8] pb-4 mb-6">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#736B5E] mb-1">
-              <FileText className="w-3.5 h-3.5 text-[#B4532A]" />
-              <span>{document.document_type.replace(/_/g, " ")}</span>
-            </div>
-            <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#1A1A1A] leading-tight">
-              {document.original_filename}
-            </h2>
+      {/* Document Canvas: 100% Edge-to-Edge document surface with zero outer gap */}
+      <div className="flex-1 overflow-y-auto bg-white text-[#1A1A1A] p-5 sm:p-7 select-text pdf-canvas-container">
+        {/* Paper Title / Header */}
+        <div className="border-b border-[#E5E0D8] pb-3 mb-5">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#736B5E] mb-1">
+            <FileText className="w-3.5 h-3.5 text-[#B4532A]" />
+            <span>{document.document_type.replace(/_/g, " ")}</span>
           </div>
-
-          {/* Clause Overlays */}
-          {filteredClauses.length === 0 ? (
-            <div className="text-center py-12 text-sm text-[#736B5E]">
-              {clauses.length === 0 ? (
-                <p className="whitespace-pre-wrap font-serif text-xs leading-relaxed text-[#2B2622]">
-                  {documentText}
-                </p>
-              ) : (
-                <p>No clauses match your search query or filter.</p>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredClauses.map((analysis) => {
-                const isSelected = activeClauseId === analysis.id;
-                const cat = String(analysis.risk_category || "").toLowerCase();
-
-                // Semi-transparent risk colors on authentic paper
-                let overlayStyles =
-                  "border-l-4 rounded-r-[8px] p-3.5 transition-all cursor-pointer ";
-
-                if (cat === "high" || cat === "high_risk" || cat === "critical" || cat === "potentially_unenforceable") {
-                  overlayStyles += isSelected
-                    ? "bg-[#FAD7D7] border-l-[#8F1D1D] ring-2 ring-[#8F1D1D] "
-                    : "bg-[#FAD7D7]/40 border-l-[#8F1D1D] hover:bg-[#FAD7D7]/70 ";
-                } else if (cat === "one_sided") {
-                  overlayStyles += isSelected
-                    ? "bg-[#FDE3CF] border-l-[#8A3B00] ring-2 ring-[#8A3B00] "
-                    : "bg-[#FDE3CF]/40 border-l-[#8A3B00] hover:bg-[#FDE3CF]/70 ";
-                } else if (cat === "slightly_unusual" || cat === "medium" || cat === "unusual") {
-                  overlayStyles += isSelected
-                    ? "bg-[#FBF0C8] border-l-[#6B4F00] ring-2 ring-[#6B4F00] "
-                    : "bg-[#FBF0C8]/40 border-l-[#6B4F00] hover:bg-[#FBF0C8]/70 ";
-                } else {
-                  overlayStyles += isSelected
-                    ? "bg-[#E3F1E4] border-l-[#1F5C2E] ring-2 ring-[#1F5C2E] "
-                    : "bg-[#E3F1E4]/40 border-l-[#1F5C2E] hover:bg-[#E3F1E4]/70 ";
-                }
-
-                if (isSelected) {
-                  overlayStyles += "shadow-sm ";
-                }
-
-                const clauseNumber =
-                  analysis.clause?.clause_number ||
-                  (analysis.clause?.clause_index !== undefined
-                    ? `§ ${analysis.clause.clause_index + 1}`
-                    : `§`);
-
-                return (
-                  <div
-                    key={analysis.id}
-                    id={`clause-${analysis.id}`}
-                    onClick={() => onClauseSelect(analysis.id)}
-                    className={overlayStyles}
-                    tabIndex={0}
-                    role="button"
-                    aria-pressed={isSelected}
-                    aria-label={`Clause ${clauseNumber}: ${analysis.clause?.title || "Legal Provision"}`}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onClauseSelect(analysis.id);
-                      }
-                    }}
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="font-serif text-xs font-semibold text-[#1A1A1A]">
-                        {clauseNumber} {analysis.clause?.title || "Contract Clause"}
-                      </span>
-                      <RiskChip
-                        category={analysis.risk_category}
-                        score={analysis.risk_score}
-                        size="sm"
-                      />
-                    </div>
-                    <p className="font-serif text-xs text-[#2B2622] leading-relaxed whitespace-pre-wrap">
-                      {analysis.clause?.content || analysis.plain_english_summary}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <h2 className="font-serif text-lg sm:text-xl font-bold text-[#1A1A1A] leading-tight">
+            {document.original_filename}
+          </h2>
         </div>
+
+        {/* Clause Overlays */}
+        {filteredClauses.length === 0 ? (
+          <div className="text-center py-12 text-sm text-[#736B5E]">
+            {clauses.length === 0 ? (
+              <p className="whitespace-pre-wrap font-serif text-xs leading-relaxed text-[#2B2622]">
+                {documentText}
+              </p>
+            ) : (
+              <p>No clauses match your search query or filter.</p>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredClauses.map((analysis) => {
+              const isSelected = activeClauseId === analysis.id;
+              const cat = String(analysis.risk_category || "").toLowerCase();
+
+              // Semi-transparent risk colors on authentic paper
+              let overlayStyles =
+                "border-l-4 rounded-r-[8px] p-3 transition-all cursor-pointer ";
+
+              if (cat === "high" || cat === "high_risk" || cat === "critical" || cat === "potentially_unenforceable") {
+                overlayStyles += isSelected
+                  ? "bg-[#FAD7D7] border-l-[#8F1D1D] ring-2 ring-[#8F1D1D] "
+                  : "bg-[#FAD7D7]/40 border-l-[#8F1D1D] hover:bg-[#FAD7D7]/70 ";
+              } else if (cat === "one_sided") {
+                overlayStyles += isSelected
+                  ? "bg-[#FDE3CF] border-l-[#8A3B00] ring-2 ring-[#8A3B00] "
+                  : "bg-[#FDE3CF]/40 border-l-[#8A3B00] hover:bg-[#FDE3CF]/70 ";
+              } else if (cat === "slightly_unusual" || cat === "medium" || cat === "unusual") {
+                overlayStyles += isSelected
+                  ? "bg-[#FBF0C8] border-l-[#6B4F00] ring-2 ring-[#6B4F00] "
+                  : "bg-[#FBF0C8]/40 border-l-[#6B4F00] hover:bg-[#FBF0C8]/70 ";
+              } else {
+                overlayStyles += isSelected
+                  ? "bg-[#E3F1E4] border-l-[#1F5C2E] ring-2 ring-[#1F5C2E] "
+                  : "bg-[#E3F1E4]/40 border-l-[#1F5C2E] hover:bg-[#E3F1E4]/70 ";
+              }
+
+              if (isSelected) {
+                overlayStyles += "shadow-sm ";
+              }
+
+              const rawNumber = analysis.clause?.clause_number?.trim() || "";
+              const title = analysis.clause?.title?.trim() || "Contract Clause";
+
+              // Cleanly format title without repeating clause numbers (e.g. avoid "7. 7. To purchase...")
+              let displayHeader = title;
+              if (rawNumber) {
+                if (
+                  !displayHeader.startsWith(rawNumber) &&
+                  !/^\d+[\.\)]/.test(displayHeader)
+                ) {
+                  displayHeader = `${rawNumber} ${displayHeader}`;
+                }
+              } else if (analysis.clause?.clause_index !== undefined) {
+                const fallbackPrefix = `§ ${analysis.clause.clause_index + 1}`;
+                if (!/^\d+[\.\)]/.test(displayHeader)) {
+                  displayHeader = `${fallbackPrefix} ${displayHeader}`;
+                }
+              }
+
+              return (
+                <div
+                  key={analysis.id}
+                  id={`clause-${analysis.id}`}
+                  onClick={() => onClauseSelect(analysis.id)}
+                  className={overlayStyles}
+                  tabIndex={0}
+                  role="button"
+                  aria-pressed={isSelected}
+                  aria-label={`Clause: ${displayHeader}`}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onClauseSelect(analysis.id);
+                    }
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="font-serif text-xs font-semibold text-[#1A1A1A] line-clamp-1">
+                      {displayHeader}
+                    </span>
+                    <RiskChip
+                      category={analysis.risk_category}
+                      score={analysis.risk_score}
+                      size="sm"
+                    />
+                  </div>
+                  <p className="font-serif text-xs text-[#2B2622] leading-relaxed whitespace-pre-wrap text-justify [text-align:justify]">
+                    {analysis.clause?.content || analysis.plain_english_summary}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -33,7 +33,31 @@ class GroundingValidator:
         self.min_precision = min_precision
 
     def _normalize(self, text: str) -> str:
-        """Normalize whitespace and lowercase for resilient matching."""
+        """
+        Normalize text for resilient quote matching:
+        1. Replace straight vs curly quotes and typographer apostrophes.
+        2. Normalize line-break hyphenation (e.g. 'ac- counts' -> 'accounts').
+        3. Collapse multiple whitespace and newlines to a single space.
+        4. Lowercase.
+        """
+        if not text:
+            return ""
+        # 1. Straight vs curly quotes & apostrophes
+        text = text.replace("“", '"').replace("”", '"').replace("«", '"').replace("»", '"')
+        text = text.replace("„", '"').replace("‟", '"')
+        text = (
+            text.replace("‘", "'")
+            .replace("’", "'")
+            .replace("‚", "'")
+            .replace("‛", "'")
+            .replace("`", "'")
+            .replace("´", "'")
+        )
+
+        # 2. Line-break hyphenation ("ac- counts", "ac-\ncounts", "pro- ceedings")
+        text = re.sub(r"(\b[a-zA-Z]+)-\s+([a-zA-Z]+\b)", r"\1\2", text)
+
+        # 3. Collapse whitespace and lowercase
         return " ".join(text.lower().split())
 
     def is_reason_grounded(
@@ -58,11 +82,21 @@ class GroundingValidator:
             if not allowed_refs or ref_id in allowed_refs:
                 return True, f"reference_id:{ref_id}"
 
-        # 2. Check for explicit quotes enclosed in quotation marks
-        quotes = re.findall(r'["\']([^"\']{4,})["\']', reason)
+        # 2. Check for explicit quotes enclosed in quotation marks (straight or curly)
+        std_reason = (
+            reason.replace("“", '"')
+            .replace("”", '"')
+            .replace("«", '"')
+            .replace("»", '"')
+            .replace("„", '"')
+            .replace("‟", '"')
+            .replace("‘", "'")
+            .replace("’", "'")
+        )
+        quotes = re.findall(r'["\']([^"\']{4,})["\']', std_reason)
         for quote in quotes:
             norm_q = self._normalize(quote)
-            if norm_q in norm_clause:
+            if norm_q and norm_q in norm_clause:
                 return True, f"quote:{quote[:30]}"
 
         # 3. Check for verbatim 4+ word phrase overlaps from the clause

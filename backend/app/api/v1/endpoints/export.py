@@ -62,18 +62,23 @@ async def export_markdown(
 
 @router.get(
     "/documents/{document_id}/pdf",
-    summary="Export analysis as PDF (v1.1 Backlog)",
-    description="PDF export is planned for v1.1 backlog.",
-    status_code=status.HTTP_501_NOT_IMPLEMENTED,
+    summary="Export analysis as PDF",
+    description="Download formatted PDF risk analysis report.",
 )
 async def export_pdf(
     document_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
-    """PDF export endpoint (v1.1 Backlog)."""
-    return JSONResponse(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        content={"detail": "PDF report export is scheduled for v1.1 backlog. Please use Markdown or JSON export in v1."},
+    """Export analysis results as PDF."""
+    service = ExportService(session)
+    pdf_bytes = await service.export_pdf(document_id, user_id)
+    doc = await service._get_authorized_document(document_id, user_id)
+    filename = f"{doc.original_filename}_risk_analysis.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

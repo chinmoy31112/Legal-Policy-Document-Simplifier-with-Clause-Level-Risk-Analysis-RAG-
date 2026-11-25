@@ -111,6 +111,7 @@ export default function UploadPage() {
               value={jurisdiction}
               onChange={(e) => setJurisdiction(e.target.value)}
             >
+              <option value="IN">India (Indian Contract Act / DPDP Act / Common Law)</option>
               <option value="US">United States (Federal & State Baseline)</option>
               <option value="EU">European Union (GDPR / Consumer Directives)</option>
               <option value="UK">United Kingdom (UK GDPR / Common Law)</option>

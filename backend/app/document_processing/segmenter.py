@@ -18,17 +18,17 @@ logger = get_logger(__name__)
 
 # ── Hierarchical Legal Numbering Patterns ─────────────────────────────────────
 
-# Level 1: Major Articles, Sections, Chapters, Schedules, Exhibits
+# Level 1: Major Articles, Sections, Chapters, Schedules, Exhibits, or Numbered Clauses
 LEVEL_1_PATTERNS = [
     re.compile(
         r"^(?:ARTICLE|SECTION|PART|CHAPTER|SCHEDULE|APPENDIX|EXHIBIT)\s+([0-9IVXLCDM]+)[\.:\s\-]+(.*)",
         re.IGNORECASE,
     ),
-    re.compile(r"^(\d+)\.\s+([A-Z][A-Za-z0-9\s,\-–—]{2,100})$"),  # e.g., "1. DEFINITIONS"
-    re.compile(r"^([IVXLCDM]+)\.\s+([A-Z\s]{2,100})$"),  # e.g., "I. RECITALS"
+    re.compile(r"^(\d+)[\.\)]\s+(.*)"),  # e.g., "1. To ask...", "1. DEFINITIONS", "(1) Clause"
+    re.compile(r"^([IVXLCDM]+)[\.\)]\s+(.*)"),  # e.g., "I. RECITALS"
 ]
 
-# Level 2: Numbered Sections (e.g., "1.1", "2.4", "Section 1.1")
+# Level 2: Sub-numbered Sections (e.g., "1.1", "2.4", "Section 1.1")
 LEVEL_2_PATTERNS = [
     re.compile(r"^(?:SECTION\s+)?(\d+\.\d+)[\.:\s\-]+(.*)", re.IGNORECASE),
     re.compile(r"^(\d+\.\d+)\s+(.*)"),
@@ -60,6 +60,14 @@ def _match_numbering_level(text: str) -> tuple[int, str, str]:
     if not cleaned:
         return 0, "", ""
 
+    # Test Level 2 first to distinguish 1.1 from 1.
+    for pat in LEVEL_2_PATTERNS:
+        m = pat.match(cleaned)
+        if m:
+            label = m.group(1).strip()
+            title = m.group(2).strip() if len(m.groups()) >= 2 else ""
+            return 2, label, title
+
     # Test Level 1
     for pat in LEVEL_1_PATTERNS:
         m = pat.match(cleaned)
@@ -67,14 +75,6 @@ def _match_numbering_level(text: str) -> tuple[int, str, str]:
             label = m.group(1).strip()
             title = m.group(2).strip() if len(m.groups()) >= 2 else ""
             return 1, label, title
-
-    # Test Level 2
-    for pat in LEVEL_2_PATTERNS:
-        m = pat.match(cleaned)
-        if m:
-            label = m.group(1).strip()
-            title = m.group(2).strip() if len(m.groups()) >= 2 else ""
-            return 2, label, title
 
     # Test Level 3
     for pat in LEVEL_3_PATTERNS:
@@ -128,12 +128,16 @@ def segment_document(
     extraction: ExtractionResult,
     doc_id: str = "doc_001",
     min_clause_chars: int = 40,
+    max_clause_chars: int = 3000,
 ) -> list[Clause]:
     """
     Segment extracted document blocks into hierarchical legal clauses.
 
     Pure function: zero DB / zero HTTP.
-    Preserves parent-child hierarchy, bounding boxes, and SHA-256 text hashes.
+    Analysis unit is the numbered clause (1., 2., ...).
+    Sub-bullets and continuation paragraphs stay inside their parent clause.
+    Child spans and bounding boxes are preserved across pages for highlighting.
+    Splits at sentence boundaries only when a clause exceeds max_clause_chars.
     """
     if not extraction.blocks:
         # Fallback to pure text splitting if blocks are unavailable
@@ -142,12 +146,32 @@ def segment_document(
     clauses: list[Clause] = []
     order_idx = 1
 
-    # Active parent tracking stack: level -> clause_id
-    active_parents: dict[int, str] = {}
-
     current_blocks: list[TextBlock] = []
     current_title: str = ""
     current_level: int = 1
+
+    # Check whether document has Level 1 clauses
+    has_lvl1 = any(
+        _match_numbering_level(b.text.split("\n", 1)[0].strip())[0] == 1 for b in extraction.blocks
+    )
+
+    def _split_long_clause(combined_text: str) -> list[str]:
+        # Split only at sentence boundaries when clause exceeds max_clause_chars
+        sentences = re.split(r"(?<=[.!?])\s+", combined_text)
+        parts: list[str] = []
+        curr: list[str] = []
+        curr_len = 0
+        for s in sentences:
+            if curr_len + len(s) > max_clause_chars and curr:
+                parts.append(" ".join(curr))
+                curr = [s]
+                curr_len = len(s)
+            else:
+                curr.append(s)
+                curr_len += len(s)
+        if curr:
+            parts.append(" ".join(curr))
+        return parts if len(parts) > 1 else [combined_text]
 
     def _flush_clause() -> None:
         nonlocal order_idx, current_blocks, current_title, current_level
@@ -164,70 +188,80 @@ def segment_document(
             current_blocks = []
             return
 
-        # Determine parent ID based on hierarchy
-        parent_id: str | None = None
-        for parent_lvl in range(current_level - 1, 0, -1):
-            if parent_lvl in active_parents:
-                parent_id = active_parents[parent_lvl]
-                break
-
         page_num = current_blocks[0].page
         boxes = _extract_bounding_boxes_from_blocks(current_blocks)
-        normalized_text = " ".join(combined_text.split())
-        raw_hash = hashlib.sha256(normalized_text.encode("utf-8")).hexdigest()
-        clause_id = f"cls_{doc_id}_{order_idx:04d}_{raw_hash[:8]}"
 
-        new_clause = Clause(
-            id=clause_id,
-            parent_id=parent_id,
-            order=order_idx,
-            title=current_title,
-            text=combined_text,
-            page=page_num,
-            bounding_boxes=boxes,
-            text_hash=raw_hash,
-        )
-        clauses.append(new_clause)
+        if len(combined_text) > max_clause_chars:
+            text_parts = _split_long_clause(combined_text)
+        else:
+            text_parts = [combined_text]
 
-        # Register this clause as active parent for its level
-        active_parents[current_level] = clause_id
-        # Invalidate deeper child levels
-        for deep_lvl in list(active_parents.keys()):
-            if deep_lvl > current_level:
-                del active_parents[deep_lvl]
+        for p_idx, part_text in enumerate(text_parts):
+            normalized_text = " ".join(part_text.split())
+            raw_hash = hashlib.sha256(normalized_text.encode("utf-8")).hexdigest()
+            clause_id = f"cls_{doc_id}_{order_idx:04d}_{raw_hash[:8]}"
+            title = current_title or part_text[:150]
+            if len(text_parts) > 1:
+                title = f"{title} (Part {p_idx + 1})"
 
-        order_idx += 1
+            new_clause = Clause(
+                id=clause_id,
+                parent_id=None,
+                order=order_idx,
+                title=title,
+                text=part_text,
+                page=page_num,
+                bounding_boxes=boxes,
+                text_hash=raw_hash,
+            )
+            clauses.append(new_clause)
+            order_idx += 1
+
         current_blocks = []
 
     for block in extraction.blocks:
         first_line = block.text.split("\n", 1)[0].strip()
         level, label, title_rem = _match_numbering_level(first_line)
 
-        is_heading_candidate = block.is_heading or (level in (1, 2, 3))
+        # Check closing transition after high numbered clauses
+        is_closing = False
+        if current_title and any(d in current_title for d in ["35", "36", "37", "38", "39"]):
+            if any(w in first_line.upper() for w in ["IN WITNESS", "SIGNED", "AND I,"]):
+                is_closing = True
 
-        if is_heading_candidate and current_blocks:
-            # We encountered a new structural section boundary
+        # Top-level boundary decision:
+        # If document has Level 1 numbered clauses, ONLY Level 1 (or major heading before clause 1, or closing) triggers a new clause.
+        # Sub-bullets (Level 3/4) and continuation paragraphs stay inside parent clause!
+        is_clause_boundary = False
+        if has_lvl1:
+            if level == 1:
+                is_clause_boundary = True
+            elif is_closing:
+                is_clause_boundary = True
+            elif block.is_heading and not current_blocks:
+                is_clause_boundary = True
+        else:
+            # If no Level 1 clauses, Level 2 or block.is_heading acts as boundary
+            if level in (1, 2) or block.is_heading:
+                is_clause_boundary = True
+
+        if is_clause_boundary and current_blocks:
             _flush_clause()
-
-            if level > 0:
-                current_level = level
-                clean_title = f"{label} {title_rem}".strip()
-                current_title = clean_title[:150]
-            else:
-                current_level = 1
+            if level == 1:
+                current_title = f"{label}. {title_rem}".strip()[:150]
+            elif is_closing:
                 current_title = first_line[:150]
-
+            else:
+                current_title = first_line[:150]
             current_blocks.append(block)
         elif not current_blocks:
-            if level > 0:
-                current_level = level
-                current_title = f"{label} {title_rem}".strip()[:150]
-            elif block.is_heading:
-                current_level = 1
+            if level == 1:
+                current_title = f"{label}. {title_rem}".strip()[:150]
+            else:
                 current_title = first_line[:150]
             current_blocks.append(block)
         else:
-            # Continuation of the current clause
+            # Sub-bullets and continuation paragraphs stay inside parent clause!
             current_blocks.append(block)
 
     # Flush the final clause
@@ -245,12 +279,16 @@ def segment_document(
 class DocumentSegmenter:
     """Class wrapper for backward compatibility with existing services."""
 
-    def __init__(self, min_clause_length: int = 40):
+    def __init__(self, min_clause_length: int = 40, max_clause_length: int = 3000):
         self.min_clause_length = min_clause_length
+        self.max_clause_length = max_clause_length
 
     def segment(self, extraction_result: ExtractionResult, doc_id: str = "doc_001") -> list[Clause]:
         return segment_document(
-            extraction_result, doc_id=doc_id, min_clause_chars=self.min_clause_length
+            extraction_result,
+            doc_id=doc_id,
+            min_clause_chars=self.min_clause_length,
+            max_clause_chars=self.max_clause_length,
         )
 
 

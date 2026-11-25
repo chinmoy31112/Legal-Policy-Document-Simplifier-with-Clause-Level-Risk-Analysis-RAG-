@@ -216,9 +216,11 @@ def extract_pdf(
 
             for line in b.get("lines", []):
                 line_spans_text: list[str] = []
+                line_parts: list[str] = []
+                prev_span_bbox = None
                 for s in line.get("spans", []):
                     span_text = s.get("text", "")
-                    if not span_text.strip():
+                    if not span_text:
                         continue
 
                     span_size = round(s.get("size", 10.0), 2)
@@ -237,6 +239,17 @@ def extract_pdf(
                     )
 
                     span_bbox = tuple(round(coord, 2) for coord in s.get("bbox", (0, 0, 0, 0)))
+                    if prev_span_bbox is not None and line_parts:
+                        gap = span_bbox[0] - prev_span_bbox[2]
+                        if (
+                            gap > span_size * 0.25
+                            and not line_parts[-1].endswith(" ")
+                            and not span_text.startswith(" ")
+                        ):
+                            line_parts.append(" ")
+                    line_parts.append(span_text)
+                    prev_span_bbox = span_bbox
+
                     block_spans.append(
                         TextSpan(
                             text=span_text,
@@ -254,8 +267,8 @@ def extract_pdf(
                     if is_bold:
                         block_bold_count += 1
 
-                if line_spans_text:
-                    block_lines_text.append(" ".join(line_spans_text).strip())
+                if line_parts:
+                    block_lines_text.append("".join(line_parts).strip())
 
             full_block_text = "\n".join(block_lines_text).strip()
             if not full_block_text:

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type { Document, DocumentType } from '@/types/document';
+import type { AnalysisStatus } from '@/types/analysis';
 import { PaginatedResponse, APIResponse } from '@/types/api';
 
 export function useDocuments(page = 1, pageSize = 10) {
@@ -114,6 +115,22 @@ export function useDeleteDocument() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
+    },
+  });
+}
+
+export function useResumeDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiClient.post<APIResponse<AnalysisStatus>>(`/documents/${id}/resume`);
+      return response.data.data;
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['documents', id] });
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      queryClient.invalidateQueries({ queryKey: ['clause-analyses', id] });
     },
   });
 }

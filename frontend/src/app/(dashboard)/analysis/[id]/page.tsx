@@ -2,7 +2,7 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
-import { useDocument } from "@/hooks/use-documents";
+import { useDocument, useResumeDocument } from "@/hooks/use-documents";
 import { useDocumentSummary, useClauseAnalyses } from "@/hooks/use-analysis";
 import { StatusBadge } from "@/components/documents/status-badge";
 import {
@@ -29,6 +29,7 @@ export default function AnalysisPage({
   const [activeClauseId, setActiveClauseId] = useState<string | null>(null);
 
   const { data: document, isLoading: docLoading, isError: docError, refetch: refetchDoc } = useDocument(id);
+  const resumeMutation = useResumeDocument();
   const isAnalyzing = document?.status === "analyzing";
   const isCompleted = document?.status === "completed";
 
@@ -105,6 +106,22 @@ export default function AnalysisPage({
             </h1>
             <div className="flex items-center gap-2 mt-0.5 text-xs text-[var(--muted-foreground)]">
               <span>{document.document_type === "non_legal" ? "Non-Legal Document" : document.document_type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</span>
+              {document.jurisdiction && (
+                <>
+                  <span>•</span>
+                  <span className="font-medium text-[var(--foreground)]">
+                    {document.jurisdiction.toUpperCase() === "IN"
+                      ? "India"
+                      : document.jurisdiction.toUpperCase() === "US"
+                      ? "United States"
+                      : document.jurisdiction.toUpperCase() === "EU"
+                      ? "European Union"
+                      : document.jurisdiction.toUpperCase() === "UK"
+                      ? "United Kingdom"
+                      : document.jurisdiction}
+                  </span>
+                </>
+              )}
               <span>•</span>
               <StatusBadge status={document.status} />
             </div>
@@ -172,8 +189,43 @@ export default function AnalysisPage({
           <h2 className="font-serif text-base font-semibold text-[var(--risk-unusual-text)] mb-1">
             Daily Quota Limit Reached
           </h2>
-          <p className="text-xs text-[var(--risk-unusual-text)] max-w-md leading-relaxed">
-            The Google Gemini API daily quota for this tier is temporarily exhausted. The document state and analyzed clauses are safely preserved. Analysis will automatically resume after the daily quota reset.
+          <p className="text-xs text-[var(--risk-unusual-text)] max-w-md leading-relaxed mb-6">
+            The Google Gemini API daily quota for this tier is temporarily exhausted. All analyzed clauses and document state are safely saved in the database checkpoint.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              disabled={resumeMutation.isPending}
+              onClick={() => resumeMutation.mutate(id)}
+              className="text-xs h-8 gap-1.5 bg-[var(--accent)] text-[var(--accent-foreground)] hover:opacity-90"
+            >
+              {resumeMutation.isPending ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Resuming Analysis...</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Resume Analysis Now</span>
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => refetchDoc()}
+              className="text-xs h-8 gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Check Status</span>
+            </Button>
+          </div>
+          <p className="text-[11px] text-[var(--muted-foreground)] mt-4">
+            Daily quota resets at 00:00 UTC. Click &quot;Resume Analysis Now&quot; to process remaining clauses without re-analyzing completed ones.
           </p>
         </div>
       ) : document.status === "failed" ? (
@@ -185,14 +237,36 @@ export default function AnalysisPage({
             Analysis Could Not Be Completed
           </h2>
           <p className="text-xs text-[var(--muted-foreground)] max-w-md mb-6 leading-relaxed">
-            The document could not be processed. This typically occurs with encrypted PDFs, scanned raster images without machine-readable text, or corrupt files.
+            The document could not be processed. This typically occurs with encrypted PDFs, scanned raster images without machine-readable text, or temporary API quota exhaustion.
           </p>
-          <Link
-            href="/upload"
-            className="inline-flex items-center justify-center px-4 py-2 text-xs font-medium text-[var(--accent-foreground)] rounded-[10px] bg-[var(--accent)] hover:opacity-90 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-          >
-            Upload Another Document
-          </Link>
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              disabled={resumeMutation.isPending}
+              onClick={() => resumeMutation.mutate(id)}
+              className="text-xs h-8 gap-1.5 bg-[var(--accent)] text-[var(--accent-foreground)] hover:opacity-90"
+            >
+              {resumeMutation.isPending ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Retrying...</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Retry Analysis</span>
+                </>
+              )}
+            </Button>
+            <Link
+              href="/upload"
+              className="inline-flex items-center justify-center px-4 py-1.5 text-xs font-medium text-[var(--muted-foreground)] rounded-[10px] border border-[var(--border)] hover:bg-[var(--soft-surface)] transition-all"
+            >
+              Upload Another Document
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="space-y-6 flex-1 flex flex-col">
@@ -214,9 +288,32 @@ export default function AnalysisPage({
 
           {/* Top Overall Risk Summary & Risk Count Chips */}
           {summary ? (
-            <AnalysisSummary analysis={summary} documentId={id} />
+            <AnalysisSummary
+              analysis={summary}
+              documentId={id}
+              clauseCount={clauses?.length}
+            />
           ) : isCompleted && summaryLoading ? (
-            <Skeleton className="w-full h-36" rounded="card" />
+            <div className="p-6 rounded-[18px] border border-[var(--border)] bg-[var(--card)] flex items-center justify-between gap-6 min-h-[120px] animate-pulse">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-[14px] bg-[var(--soft-surface)] flex items-center justify-center shrink-0 text-[var(--accent)]">
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--soft-surface)] text-[var(--accent)] border border-[var(--border)]">
+                      Synthesizing Brief
+                    </span>
+                  </div>
+                  <h3 className="font-serif text-sm font-semibold text-[var(--foreground)]">
+                    Generating Executive Risk Summary...
+                  </h3>
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    Aggregating clause evaluations and comparing against commercial benchmarks.
+                  </p>
+                </div>
+              </div>
+            </div>
           ) : null}
 
           {/* Two-Column Workspace: Viewer (Left) + Detail Panel (Right) */}
