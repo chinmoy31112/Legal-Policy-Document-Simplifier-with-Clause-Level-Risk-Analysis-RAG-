@@ -32,6 +32,7 @@ from app.ai.prompts import (
     REPAIR_PROMPT,
     SYSTEM_INSTRUCTION,
 )
+from app.ai.rate_limiter import DailyQuotaExceededError
 from app.ai.response_parser import (
     DocumentClassification,
     DocumentRiskAnalysis,
@@ -82,11 +83,19 @@ class RiskAnalysisPipeline:
             self.clause_llm = GeminiLLMClient(model_name=self.clause_model_name)
             self.summary_llm = GeminiLLMClient(model_name=self.summary_model_name)
 
-        self.llm_client = self.clause_llm  # backward compatibility alias
         self.grounding_validator = grounding_validator or GroundingValidator(min_precision=0.90)
         self._clause_cache: dict[str, dict[str, Any]] = {}
         self.last_batch_telemetry: list[dict[str, Any]] = []
         self.last_summary_telemetry: dict[str, Any] = {}
+
+    @property
+    def llm_client(self) -> LLMClient:
+        """Backward-compatibility property delegating to clause_llm."""
+        return self.clause_llm
+
+    @llm_client.setter
+    def llm_client(self, client: LLMClient) -> None:
+        self.clause_llm = client
 
     def _cache_key(self, clause_text: str, model_name: str) -> str:
         """Composite cache key: clause hash + prompt version + resolved model version."""
@@ -334,9 +343,27 @@ class RiskAnalysisPipeline:
 
         sem = asyncio.Semaphore(max_concurrency)
         telemetry_lock = asyncio.Lock()
+        quota_exhausted_event = asyncio.Event()
+
+        def _is_rate_limiter_exhausted() -> bool:
+            limiter = getattr(self.clause_llm, "_rate_limiter", None)
+            return bool(getattr(limiter, "is_daily_quota_exhausted", False))
 
         async def process_chunk(batch_idx: int, chunk_indices: list[int]) -> None:
+            # Check shared daily quota status before acquiring semaphore
+            if quota_exhausted_event.is_set() or _is_rate_limiter_exhausted():
+                raise DailyQuotaExceededError(
+                    model_name=self.clause_model_name,
+                    notice="Daily API quota reached. Sibling batch aborted immediately.",
+                )
+
             async with sem:
+                if quota_exhausted_event.is_set() or _is_rate_limiter_exhausted():
+                    raise DailyQuotaExceededError(
+                        model_name=self.clause_model_name,
+                        notice="Daily API quota reached. Sibling batch aborted immediately.",
+                    )
+
                 batch_clauses = [clauses[i] for i in chunk_indices]
 
                 # Step 3: Parallel vector retrieval for each clause in the chunk
@@ -440,12 +467,15 @@ class RiskAnalysisPipeline:
                                 self._clause_cache[ckey] = dict(res_dict)
                                 results[orig_idx] = res_dict
 
+                except DailyQuotaExceededError:
+                    quota_exhausted_event.set()
+                    raise
                 except Exception as exc:
                     logger.warning("batch_llm_call_failed", error=str(exc))
                     failed_indices = list(chunk_indices)
 
-                # Re-send only failed or invalid clauses
-                if failed_indices:
+                # Re-send only failed or invalid clauses (skip if daily quota exhausted)
+                if failed_indices and not quota_exhausted_event.is_set() and not _is_rate_limiter_exhausted():
                     logger.info("resending_failed_or_invalid_clauses", count=len(failed_indices))
                     for orig_idx in failed_indices:
                         c = clauses[orig_idx]
@@ -475,7 +505,14 @@ class RiskAnalysisPipeline:
                 await asyncio.sleep(0.5)
             tasks.append(asyncio.create_task(process_chunk(b_idx + 1, chunk)))
 
-        await asyncio.gather(*tasks)
+        try:
+            await asyncio.gather(*tasks)
+        except DailyQuotaExceededError:
+            quota_exhausted_event.set()
+            for t in tasks:
+                if not t.done():
+                    t.cancel()
+            raise
 
         # Sort telemetry by batch_index for consistent reporting
         self.last_batch_telemetry.sort(key=lambda x: x.get("batch_index", 0))

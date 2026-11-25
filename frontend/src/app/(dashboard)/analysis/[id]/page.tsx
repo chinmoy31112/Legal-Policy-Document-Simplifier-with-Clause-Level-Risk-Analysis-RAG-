@@ -173,7 +173,7 @@ export default function AnalysisPage({
             Daily Quota Limit Reached
           </h2>
           <p className="text-xs text-[var(--risk-unusual-text)] max-w-md leading-relaxed">
-            The Google Gemini API quota for this tier is temporarily exhausted. The document state is safely preserved and will automatically resume.
+            The Google Gemini API daily quota for this tier is temporarily exhausted. The document state and analyzed clauses are safely preserved. Analysis will automatically resume after the daily quota reset.
           </p>
         </div>
       ) : document.status === "failed" ? (

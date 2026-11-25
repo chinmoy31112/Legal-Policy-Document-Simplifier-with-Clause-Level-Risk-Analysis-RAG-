@@ -52,20 +52,20 @@ class DailyQuotaExceededError(Exception):
     def __init__(
         self,
         model_name: str,
-        current_rpd: int,
-        max_rpd: int,
-        seconds_until_reset: float,
+        current_rpd: int = 0,
+        max_rpd: int = 0,
+        seconds_until_reset: float = 0.0,
+        notice: str | None = None,
     ):
         self.model_name = model_name
         self.current_rpd = current_rpd
         self.max_rpd = max_rpd
         self.seconds_until_reset = seconds_until_reset
-        hours = int(seconds_until_reset // 3600)
-        minutes = int((seconds_until_reset % 3600) // 60)
-        super().__init__(
-            f"Daily API quota reached for model '{model_name}' ({current_rpd}/{max_rpd} requests used). "
-            f"Resets at 00:00 UTC (in {hours}h {minutes}m)."
+        self.notice = (
+            notice
+            or f"Daily API quota reached for model '{model_name}'. Job paused and will resume automatically after the daily quota reset."
         )
+        super().__init__(self.notice)
 
 
 class CircuitBreaker:
@@ -230,7 +230,31 @@ class SharedModelRateLimiter:
         self._local_history: list[tuple[float, int, str]] = []
         self._daily_counts: dict[str, int] = {}
         self._last_dispatch_time: float = 0.0
+        self._daily_quota_exhausted: bool = False
+        self._daily_quota_notice: str | None = None
         self._lock = asyncio.Lock()
+
+    @property
+    def is_daily_quota_exhausted(self) -> bool:
+        """Return True if daily quota is marked exhausted across concurrent tasks."""
+        return self._daily_quota_exhausted
+
+    def mark_daily_quota_exhausted(self, notice: str | None = None) -> None:
+        """Atomically mark daily quota exhausted across all concurrent tasks sharing this limiter."""
+        self._daily_quota_exhausted = True
+        self._daily_quota_notice = (
+            notice or f"Daily API quota reached for model '{self.model_name}'. Resumes after daily quota reset."
+        )
+        logger.warning(
+            "shared_rate_limiter_daily_quota_exhausted_flag_set",
+            model=self.model_name,
+            notice=self._daily_quota_notice,
+        )
+
+    def reset_daily_quota_exhausted(self) -> None:
+        """Reset the shared daily quota exhausted flag."""
+        self._daily_quota_exhausted = False
+        self._daily_quota_notice = None
 
     def _seconds_until_midnight_utc(self) -> float:
         from datetime import datetime, timedelta, timezone
@@ -314,7 +338,26 @@ class SharedModelRateLimiter:
         Wait until capacity is available under both RPM and TPM quotas.
         Logs telemetry and emits a warning when utilization exceeds 80%.
         """
+        # Fast-fail immediately if daily quota is already marked exhausted by any sibling batch
+        if self._daily_quota_exhausted:
+            raise DailyQuotaExceededError(
+                model_name=self.model_name,
+                current_rpd=self.max_rpd,
+                max_rpd=self.max_rpd,
+                seconds_until_reset=self._seconds_until_midnight_utc(),
+                notice=self._daily_quota_notice,
+            )
+
         while True:
+            if self._daily_quota_exhausted:
+                raise DailyQuotaExceededError(
+                    model_name=self.model_name,
+                    current_rpd=self.max_rpd,
+                    max_rpd=self.max_rpd,
+                    seconds_until_reset=self._seconds_until_midnight_utc(),
+                    notice=self._daily_quota_notice,
+                )
+
             # 1. Check Circuit Breaker
             can_run, cb_wait = await self.circuit_breaker.can_execute()
             if not can_run:
@@ -397,6 +440,7 @@ class SharedModelRateLimiter:
         cur_rpd_raw = await redis_client.get(rpd_key)
         cur_rpd = int(cur_rpd_raw) if cur_rpd_raw else 0
         if cur_rpd >= self.max_rpd:
+            self._daily_quota_exhausted = True
             wait_time = self._seconds_until_midnight_utc()
             raise DailyQuotaExceededError(
                 model_name=self.model_name,
@@ -468,6 +512,7 @@ class SharedModelRateLimiter:
             # Check daily budget
             cur_rpd = self._daily_counts.get(today_str, 0)
             if cur_rpd >= self.max_rpd:
+                self._daily_quota_exhausted = True
                 wait_time = self._seconds_until_midnight_utc()
                 raise DailyQuotaExceededError(
                     model_name=self.model_name,

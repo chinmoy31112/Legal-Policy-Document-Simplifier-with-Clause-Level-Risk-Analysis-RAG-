@@ -24,10 +24,11 @@ from pydantic import ValidationError as PydanticValidationError
 from app.ai.interfaces import LLMClient
 from app.ai.prompts import SYSTEM_INSTRUCTION
 from app.ai.rate_limiter import (
-    calculate_jittered_backoff as calculate_jittered_backoff,
+    DailyQuotaExceededError,
+    get_model_rate_limiter,
 )
 from app.ai.rate_limiter import (
-    get_model_rate_limiter,
+    calculate_jittered_backoff as calculate_jittered_backoff,
 )
 from app.ai.response_parser import DocumentClassification, DocumentRiskAnalysis, LLMClauseAnalysis
 from app.core.config import get_settings
@@ -41,6 +42,26 @@ logger = get_logger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 MAX_REPAIR_RETRIES = 2
+
+
+def is_daily_quota_error(err_str: str) -> bool:
+    """
+    Detect whether an error specifically indicates daily quota exhaustion (RPD)
+    by checking for metric names and per-day quota violations, rather than transient RPM bursts.
+    """
+    norm = err_str.lower()
+    daily_quota_indicators = [
+        "generate_content_free_tier_requests",
+        "generaterequestsperday",
+        "requests per day",
+        "perday",
+        "per_day",
+        "free_tier_requests",
+        "day limit exceeded",
+        "daily quota",
+        "daily request",
+    ]
+    return any(indicator in norm for indicator in daily_quota_indicators)
 
 
 class GeminiLLMClient(LLMClient):
@@ -356,23 +377,40 @@ class GeminiLLMClient(LLMClient):
                 err_str = str(exc)
                 if isinstance(exc, asyncio.TimeoutError):
                     err_str = "504 Gateway Timeout: Google GenAI API request timed out after 90s."
+
+                # Fast-fail immediately on daily quota limit: do not enter retry loop
+                if is_daily_quota_error(err_str):
+                    logger.warning(
+                        "llm_daily_quota_limit_detected_fast_fail",
+                        model=self._model_name,
+                        error=err_str[:200],
+                    )
+                    self._rate_limiter.mark_daily_quota_exhausted(notice=err_str)
+                    raise DailyQuotaExceededError(
+                        model_name=self._model_name,
+                        current_rpd=self._rate_limiter.max_rpd,
+                        max_rpd=self._rate_limiter.max_rpd,
+                        seconds_until_reset=self._rate_limiter._seconds_until_midnight_utc(),
+                        notice="Daily API quota reached. Job paused and will resume automatically after the daily quota reset.",
+                    ) from exc
+
+                # Retrying 2-3 seconds only for transient per-minute limits (RPM) or temporary 503/UNAVAILABLE
                 if any(m in err_str for m in ["RESOURCE_EXHAUSTED", "429", "quota", "503", "UNAVAILABLE", "502", "504", "high demand"]):
                     match = re.search(r"retry\s+in\s+([\d.]+)s", err_str) or re.search(
                         r"'retryDelay':\s*'(\d+)s'", err_str
                     )
-                    retry_delay = float(match.group(1)) + 0.5 if match else (2.0 * (rate_attempt + 1))
+                    raw_delay = float(match.group(1)) if match else (2.0 * rate_attempt + 1.0)
+                    retry_delay = min(max(raw_delay, 2.0), 5.0) + 0.5
                     await self._rate_limiter.circuit_breaker.record_failure(
                         retry_after=retry_delay
                     )
                     logger.warning(
-                        "llm_rate_limit_or_unavailable_retrying",
+                        "llm_per_minute_rate_limit_retrying",
                         model=self._model_name,
                         attempt=rate_attempt + 1,
                         retry_delay_seconds=round(retry_delay, 2),
                         error=err_str[:150],
                     )
-                    # Do not double-sleep here: rate_limiter.acquire() in the next loop
-                    # iteration checks the circuit breaker and waits for the exact window.
                     continue
 
                 logger.error("llm_api_call_failed", error=err_str[:200])
