@@ -1,5 +1,6 @@
 """Test configuration and shared fixtures."""
 
+import asyncio
 import sys
 from collections.abc import AsyncGenerator
 from pathlib import Path
@@ -7,6 +8,7 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 
 # Ensure backend root is on sys.path
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -28,9 +30,6 @@ async def ensure_tables_exist():
     global _tables_initialized
     if not _tables_initialized:
         try:
-            import asyncio
-            from sqlalchemy import text
-
             async def _init():
                 async with engine.begin() as conn:
                     try:
