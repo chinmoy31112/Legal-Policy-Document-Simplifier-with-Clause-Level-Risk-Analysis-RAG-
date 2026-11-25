@@ -236,6 +236,12 @@ class AnalysisService:
 
                 async def on_batch_completed(batch_items: list[tuple[int, dict[str, Any]]]) -> None:
                     async with db_lock:
+                        # Check if document was deleted while this batch was running
+                        doc_check = await self.document_repo.get_by_id(document.id)
+                        if not doc_check:
+                            logger.info("document_deleted_during_analysis_aborting", document_id=str(document_id))
+                            raise asyncio.CancelledError("Document was deleted during analysis.")
+
                         for orig_idx, result_dict in batch_items:
                             clause = unanalyzed_clauses[orig_idx]
                             c_id_str = str(clause.id)
@@ -422,6 +428,14 @@ class AnalysisService:
             await self.session.commit()
 
             logger.info("analysis_task_completed", document_id=str(document_id))
+
+        except asyncio.CancelledError:
+            logger.info("analysis_task_cancelled", document_id=str(document_id))
+            try:
+                await self.session.rollback()
+            except Exception:
+                pass
+            raise
 
         except DailyQuotaExceededError as quota_err:
             logger.warning(

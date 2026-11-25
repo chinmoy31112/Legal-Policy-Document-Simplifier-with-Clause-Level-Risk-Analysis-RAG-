@@ -10,6 +10,7 @@ Verifies:
 6. Delete-My-Data (GDPR compliance) purging database records and disk storage.
 """
 
+import asyncio
 import uuid
 from typing import Any
 
@@ -394,3 +395,45 @@ async def test_delete_my_data_gdpr_compliance(client: AsyncClient):
         json={"email": email, "password": "Password123!", "full_name": "Recreated User"},
     )
     assert re_reg.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_delete_document_cancels_active_background_task(client: AsyncClient):
+    """Verify that deleting a document cancels any running background analysis task immediately."""
+    from app.api.v1.endpoints.documents import _active_analysis_tasks
+
+    email = f"cancel_{uuid.uuid4().hex[:8]}@example.com"
+    await client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "password": "Password123!", "full_name": "Cancel Test User"},
+    )
+    login_res = await client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": "Password123!"},
+    )
+    token = login_res.json()["data"]["access_token"]
+    header = {"Authorization": f"Bearer {token}"}
+
+    pdf_bytes = create_sample_text_pdf()
+    up = await client.post(
+        "/api/v1/documents",
+        headers=header,
+        files={"file": ("cancel_test.pdf", pdf_bytes, "application/pdf")},
+    )
+    doc_id = uuid.UUID(up.json()["data"]["id"])
+
+    # Simulate an active background task running for this document
+    dummy_task = asyncio.create_task(asyncio.sleep(60))
+    _active_analysis_tasks[doc_id] = dummy_task
+
+    try:
+        del_resp = await client.delete(f"/api/v1/documents/{doc_id}", headers=header)
+        assert del_resp.status_code == 204
+        assert doc_id not in _active_analysis_tasks
+        # Verify dummy_task was cancelled
+        with pytest.raises(asyncio.CancelledError):
+            await dummy_task
+        assert dummy_task.cancelled()
+    finally:
+        if not dummy_task.done():
+            dummy_task.cancel()

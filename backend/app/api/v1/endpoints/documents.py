@@ -4,6 +4,7 @@ Document management endpoints.
 Handles document upload, listing, detail retrieval, and deletion.
 """
 
+import asyncio
 from typing import Annotated
 from uuid import UUID
 
@@ -24,6 +25,7 @@ from app.ai.rate_limiter import get_model_rate_limiter
 from app.api.v1.deps import get_current_user_id, get_pagination
 from app.core.config import get_settings
 from app.core.database import async_session_factory
+from app.core.logging import get_logger
 from app.dependencies import get_db_session
 from app.schemas.analysis import (
     AnalysisStatusResponse,
@@ -42,14 +44,34 @@ from app.services.analysis_service import AnalysisService
 from app.services.document_service import DocumentService
 from app.services.export_service import ExportService
 
+logger = get_logger(__name__)
+
 router = APIRouter()
+
+# Active in-flight background analysis tasks indexed by document_id for instant cancellation
+_active_analysis_tasks: dict[UUID, asyncio.Task] = {}
 
 
 async def run_analysis_background(document_id: UUID):
     """Helper to run the analysis task with a fresh database session."""
-    async with async_session_factory() as session:
-        service = AnalysisService(session)
-        await service._run_analysis_task(document_id)
+    current_task = asyncio.current_task()
+    if current_task:
+        _active_analysis_tasks[document_id] = current_task
+    try:
+        async with async_session_factory() as session:
+            service = AnalysisService(session)
+            await service._run_analysis_task(document_id)
+    except asyncio.CancelledError:
+        logger.info("analysis_background_task_cancelled", document_id=str(document_id))
+        raise
+    except Exception as exc:
+        logger.error(
+            "analysis_background_task_unhandled_error",
+            document_id=str(document_id),
+            error=str(exc),
+        )
+    finally:
+        _active_analysis_tasks.pop(document_id, None)
 
 
 @router.post(
@@ -163,6 +185,15 @@ async def delete_document(
 ):
     """Delete a document and its associated data."""
     service = DocumentService(session)
+    # Check ownership and existence before cancelling task or deleting
+    await service.get_document(document_id, user_id)
+
+    # Cancel any active running analysis task immediately to stop burning API quota
+    active_task = _active_analysis_tasks.pop(document_id, None)
+    if active_task and not active_task.done():
+        active_task.cancel()
+        logger.info("cancelled_active_analysis_task_on_delete", document_id=str(document_id))
+
     await service.delete_document(document_id, user_id)
 
 

@@ -664,11 +664,12 @@ class RiskAnalysisPipeline:
 
         try:
             await asyncio.gather(*tasks)
-        except DailyQuotaExceededError:
+        except (DailyQuotaExceededError, asyncio.CancelledError, Exception):
             quota_exhausted_event.set()
             for t in tasks:
                 if not t.done():
                     t.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
             raise
 
         # Sort telemetry by batch_index for consistent reporting

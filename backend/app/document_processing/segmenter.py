@@ -146,6 +146,7 @@ def segment_document(
     clauses: list[Clause] = []
     order_idx = 1
 
+    active_parents: dict[int, str] = {}
     current_blocks: list[TextBlock] = []
     current_title: str = ""
     current_level: int = 1
@@ -196,6 +197,13 @@ def segment_document(
         else:
             text_parts = [combined_text]
 
+        # Determine parent ID based on hierarchy
+        parent_id: str | None = None
+        for parent_lvl in range(current_level - 1, 0, -1):
+            if parent_lvl in active_parents:
+                parent_id = active_parents[parent_lvl]
+                break
+
         for p_idx, part_text in enumerate(text_parts):
             normalized_text = " ".join(part_text.split())
             raw_hash = hashlib.sha256(normalized_text.encode("utf-8")).hexdigest()
@@ -206,7 +214,7 @@ def segment_document(
 
             new_clause = Clause(
                 id=clause_id,
-                parent_id=None,
+                parent_id=parent_id,
                 order=order_idx,
                 title=title,
                 text=part_text,
@@ -215,6 +223,13 @@ def segment_document(
                 text_hash=raw_hash,
             )
             clauses.append(new_clause)
+
+            if current_level > 0:
+                active_parents[current_level] = clause_id
+                for deep_lvl in list(active_parents.keys()):
+                    if deep_lvl > current_level:
+                        del active_parents[deep_lvl]
+
             order_idx += 1
 
         current_blocks = []
@@ -230,24 +245,20 @@ def segment_document(
                 is_closing = True
 
         # Top-level boundary decision:
-        # If document has Level 1 numbered clauses, ONLY Level 1 (or major heading before clause 1, or closing) triggers a new clause.
-        # Sub-bullets (Level 3/4) and continuation paragraphs stay inside parent clause!
+        # Numbered legal clauses (Level 1, 2, or 3) trigger a clause boundary.
+        # Sub-bullets (Level 4) and continuation paragraphs stay inside parent clause!
         is_clause_boundary = False
-        if has_lvl1:
-            if level == 1:
-                is_clause_boundary = True
-            elif is_closing:
-                is_clause_boundary = True
-            elif block.is_heading and not current_blocks:
-                is_clause_boundary = True
-        else:
-            # If no Level 1 clauses, Level 2 or block.is_heading acts as boundary
-            if level in (1, 2) or block.is_heading:
-                is_clause_boundary = True
+        if level in (1, 2, 3):
+            is_clause_boundary = True
+        elif is_closing:
+            is_clause_boundary = True
+        elif not has_lvl1 and block.is_heading:
+            is_clause_boundary = True
 
         if is_clause_boundary and current_blocks:
             _flush_clause()
-            if level == 1:
+            current_level = level if level > 0 else 1
+            if level > 0:
                 current_title = f"{label}. {title_rem}".strip()[:150]
             elif is_closing:
                 current_title = first_line[:150]
@@ -255,9 +266,11 @@ def segment_document(
                 current_title = first_line[:150]
             current_blocks.append(block)
         elif not current_blocks:
-            if level == 1:
+            if level > 0:
+                current_level = level
                 current_title = f"{label}. {title_rem}".strip()[:150]
             else:
+                current_level = 1
                 current_title = first_line[:150]
             current_blocks.append(block)
         else:
