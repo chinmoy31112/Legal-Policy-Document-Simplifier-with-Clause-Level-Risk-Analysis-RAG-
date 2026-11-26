@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useState, Suspense } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDocuments, useDeleteDocument } from "@/hooks/use-documents";
+import {
+  useDocuments,
+  useDeleteDocument,
+  useResumeDocument,
+} from "@/hooks/use-documents";
 import { apiClient } from "@/lib/api-client";
 import { StatusBadge } from "@/components/documents/status-badge";
 import {
@@ -16,23 +20,27 @@ import {
   AlertTriangle,
   Download,
   RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { RiskChip } from "@/components/ui/risk-chip";
+import { pluralize } from "@/lib/utils";
 
 function DocumentsContent() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [deletingIds, setDeletingIds] = useState<Record<string, boolean>>({});
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError, refetch, isFetching } = useDocuments(1, 50);
   const deleteMutation = useDeleteDocument();
+  const resumeMutation = useResumeDocument();
 
   const documents = data?.items || [];
 
   const handlePrefetch = (docId: string) => {
     queryClient.prefetchQuery({
-      queryKey: ['documents', docId],
+      queryKey: ["documents", docId],
       queryFn: async () => {
         const res = await apiClient.get(`/documents/${docId}`);
         return res.data.data;
@@ -40,7 +48,7 @@ function DocumentsContent() {
       staleTime: 5 * 60 * 1000,
     });
     queryClient.prefetchQuery({
-      queryKey: ['analysis', docId, 'summary'],
+      queryKey: ["analysis", docId, "summary"],
       queryFn: async () => {
         const res = await apiClient.get(`/analysis/${docId}/summary`);
         return res.data.data;
@@ -48,7 +56,7 @@ function DocumentsContent() {
       staleTime: 5 * 60 * 1000,
     });
     queryClient.prefetchQuery({
-      queryKey: ['analysis', docId, 'clauses'],
+      queryKey: ["analysis", docId, "clauses"],
       queryFn: async () => {
         const res = await apiClient.get(`/analysis/${docId}/clauses`);
         return res.data.data;
@@ -57,12 +65,33 @@ function DocumentsContent() {
     });
   };
 
-  const filteredDocs = documents.filter((doc) =>
-    doc.original_filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    doc.document_type.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredDocs = documents.filter(
+    (doc) =>
+      doc.original_filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      doc.document_type.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleExport = (docId: string, format: "json" | "markdown" | "pdf", filename?: string) => {
+  const handleDeleteClick = async (docId: string, filename: string) => {
+    if (!window.confirm(`Are you sure you want to delete ${filename}?`)) {
+      return;
+    }
+    setDeletingIds((prev) => ({ ...prev, [docId]: true }));
+    try {
+      await deleteMutation.mutateAsync(docId);
+    } finally {
+      setDeletingIds((prev) => {
+        const next = { ...prev };
+        delete next[docId];
+        return next;
+      });
+    }
+  };
+
+  const handleExport = (
+    docId: string,
+    format: "json" | "markdown" | "pdf",
+    filename?: string
+  ) => {
     const url = `${API_BASE_URL}/documents/${docId}/export/${format}`;
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
@@ -126,7 +155,7 @@ function DocumentsContent() {
 
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[8px] bg-[var(--soft-surface)] border border-[var(--border)] text-xs font-medium text-[var(--muted-foreground)]">
             <Filter className="w-3 h-3 text-[var(--accent)]" />
-            <span>{filteredDocs.length} Total Records</span>
+            <span>Total: {pluralize(filteredDocs.length, "record")}</span>
           </div>
 
           <Button
@@ -191,6 +220,15 @@ function DocumentsContent() {
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {filteredDocs.map((doc) => {
+                  const isDeletingDoc = !!deletingIds[doc.id];
+                  const effectiveStatus = isDeletingDoc ? "cancelling" : doc.status;
+                  const canRetry =
+                    !isDeletingDoc &&
+                    (doc.status === "failed" ||
+                      doc.status === "interrupted" ||
+                      doc.status === "cancelled" ||
+                      doc.status === "waiting for quota");
+
                   const riskScore = doc.overall_risk_score;
                   let riskCategory = "standard";
                   if (riskScore !== null && riskScore !== undefined) {
@@ -202,6 +240,7 @@ function DocumentsContent() {
                   return (
                     <tr
                       key={doc.id}
+                      data-testid={`document-row-${doc.id}`}
                       className="hover:bg-[var(--soft-surface)]/40 transition-colors group"
                     >
                       <td className="py-3.5 px-5 font-medium text-[var(--foreground)]">
@@ -209,33 +248,64 @@ function DocumentsContent() {
                           <div className="w-7 h-7 rounded-[8px] bg-[var(--soft-surface)] border border-[var(--border)] flex items-center justify-center text-[var(--accent)] shrink-0">
                             <FileText className="w-3.5 h-3.5" />
                           </div>
-                          <span className="truncate max-w-xs font-semibold">
-                            {doc.original_filename}
-                          </span>
+                          <div className="min-w-0">
+                            <span className="truncate max-w-xs font-semibold block">
+                              {doc.original_filename}
+                            </span>
+                            {typeof doc.clause_count === "number" && doc.clause_count > 0 && (
+                              <span className="text-[10px] text-[var(--muted-foreground)]">
+                                {pluralize(doc.clause_count, "clause")}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="py-3.5 px-5 text-[var(--muted-foreground)]">
                         {doc.document_type === "non_legal"
                           ? "Non-Legal Document"
-                          : doc.document_type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                          : doc.document_type
+                              .replace(/_/g, " ")
+                              .replace(/\b\w/g, (c) => c.toUpperCase())}
                       </td>
                       <td className="py-3.5 px-5">
                         {riskScore !== null && riskScore !== undefined ? (
                           <RiskChip category={riskCategory} score={riskScore} size="sm" />
                         ) : doc.document_type === "non_legal" || doc.status === "completed" ? (
-                          <span className="text-[var(--muted-foreground)] text-[11px] font-medium">N/A (Non-Legal)</span>
+                          <span className="text-[var(--muted-foreground)] text-[11px] font-medium">
+                            N/A (Non-Legal)
+                          </span>
                         ) : (
-                          <span className="text-[var(--muted-foreground)] italic text-[11px]">Pending</span>
+                          <span className="text-[var(--muted-foreground)] italic text-[11px]">
+                            Pending
+                          </span>
                         )}
                       </td>
                       <td className="py-3.5 px-5">
-                        <StatusBadge status={doc.status} />
+                        <StatusBadge status={effectiveStatus} />
                       </td>
                       <td className="py-3.5 px-5 text-[var(--muted-foreground)]">
                         {new Date(doc.created_at).toLocaleDateString()}
                       </td>
                       <td className="py-3.5 px-5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {canRetry && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={resumeMutation.isPending}
+                              onClick={() => resumeMutation.mutate(doc.id)}
+                              className="h-7 text-xs gap-1"
+                            >
+                              <RefreshCw
+                                className={`w-3 h-3 ${resumeMutation.isPending ? "animate-spin" : ""}`}
+                              />
+                              <span>
+                                {doc.status === "waiting for quota" ? "Resume" : "Retry"}
+                              </span>
+                            </Button>
+                          )}
+
                           <Link
                             href={`/analysis/${doc.id}`}
                             onMouseEnter={() => handlePrefetch(doc.id)}
@@ -250,7 +320,9 @@ function DocumentsContent() {
                           {doc.status === "completed" && (
                             <button
                               type="button"
-                              onClick={() => handleExport(doc.id, "pdf", doc.original_filename)}
+                              onClick={() =>
+                                handleExport(doc.id, "pdf", doc.original_filename)
+                              }
                               className="p-1.5 rounded-[8px] hover:bg-[var(--soft-surface)] text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                               title="Download PDF Risk Report"
                               aria-label="Download PDF Risk Report"
@@ -261,16 +333,18 @@ function DocumentsContent() {
 
                           <button
                             type="button"
-                            onClick={() => {
-                              if (window.confirm(`Are you sure you want to delete ${doc.original_filename}?`)) {
-                                deleteMutation.mutate(doc.id);
-                              }
-                            }}
-                            className="p-1.5 rounded-[8px] hover:bg-[var(--risk-high-bg)] text-[var(--muted-foreground)] hover:text-[var(--risk-high-text)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-                            title="Delete Document"
+                            disabled={isDeletingDoc}
+                            onClick={() => handleDeleteClick(doc.id, doc.original_filename)}
+                            className="p-1.5 rounded-[8px] hover:bg-[var(--risk-high-bg)] text-[var(--muted-foreground)] hover:text-[var(--risk-high-text)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:opacity-50"
+                            title={isDeletingDoc ? "Stopping analysis..." : "Delete Document"}
                             aria-label="Delete Document"
+                            data-testid={`delete-doc-${doc.id}`}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            {isDeletingDoc ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
                           </button>
                         </div>
                       </td>

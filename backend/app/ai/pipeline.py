@@ -22,6 +22,7 @@ from typing import Any
 from app.ai.embedding import GeminiEmbedder
 from app.ai.grounding import GroundingValidator
 from app.ai.interfaces import Embedder, LLMClient, VectorStore
+from app.ai.ledger import CallBudgetExceededError, call_purpose
 from app.ai.llm import GeminiLLMClient
 from app.ai.prompts import (
     BATCH_CLAUSE_ANALYSIS_PROMPT,
@@ -42,6 +43,7 @@ from app.ai.response_parser import (
 )
 from app.ai.retrieval import RetrievalService
 from app.ai.vector_store import get_vector_store
+from app.core.cancellation import JobCancelledError
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.core.metrics import track_llm_call, track_prompt_injection, track_vector_search
@@ -102,6 +104,9 @@ class RiskAnalysisPipeline:
 
         self.grounding_validator = grounding_validator or GroundingValidator(min_precision=0.90)
         self._clause_cache: dict[str, dict[str, Any]] = {}
+        from app.core.cancellation import register_cache_store
+
+        register_cache_store("clause", self._clause_cache)
         self.last_batch_telemetry: list[dict[str, Any]] = []
         self.last_summary_telemetry: dict[str, Any] = {}
         self.last_repair_count: int = 0
@@ -146,25 +151,36 @@ class RiskAnalysisPipeline:
         )
 
         try:
-            classification = await self.summary_llm.generate_structured(
-                prompt=prompt,
-                response_model=DocumentClassification,
-                system_instruction=SYSTEM_INSTRUCTION,
-            )
+            with call_purpose("classify"):
+                classification = await self.summary_llm.generate_structured(
+                    prompt=prompt,
+                    response_model=DocumentClassification,
+                    system_instruction=SYSTEM_INSTRUCTION,
+                )
             return classification
         except Exception as e:
             logger.warning("document_classification_fallback", error=str(e)[:150])
             lower = sample_text.lower()
             non_legal_terms = [
-                "setup guide", "installation", "quickstart", "getting started",
-                "prerequisites", "readme", "user manual", "npm install", "pip install",
+                "setup guide",
+                "installation",
+                "quickstart",
+                "getting started",
+                "prerequisites",
+                "readme",
+                "user manual",
+                "npm install",
+                "pip install",
             ]
             is_non_legal = any(t in lower for t in non_legal_terms) and not any(
-                t in lower for t in ["in witness whereof", "hereby agree", "indemnif", "governing law"]
+                t in lower
+                for t in ["in witness whereof", "hereby agree", "indemnif", "governing law"]
             )
             return DocumentClassification(
                 is_legal_document=not is_non_legal,
-                document_type_detected="Setup Guide / Technical Documentation" if is_non_legal else (declared_type or "General Contract"),
+                document_type_detected="Setup Guide / Technical Documentation"
+                if is_non_legal
+                else (declared_type or "General Contract"),
                 confidence=0.85,
                 reason="Classified via heuristic fallback.",
             )
@@ -211,7 +227,15 @@ class RiskAnalysisPipeline:
 
         # Detect adversarial injection patterns for security telemetry
         lowered_clause = clause_text.lower()
-        if any(marker in lowered_clause for marker in ["system override", "ignore previous instructions", "disregard all rules", "defense attorney"]):
+        if any(
+            marker in lowered_clause
+            for marker in [
+                "system override",
+                "ignore previous instructions",
+                "disregard all rules",
+                "defense attorney",
+            ]
+        ):
             track_prompt_injection()
 
         ref_texts: list[str] = []
@@ -249,7 +273,10 @@ class RiskAnalysisPipeline:
             response_model=LLMClauseAnalysis,
             system_instruction=SYSTEM_INSTRUCTION,
         )
-        track_llm_call(getattr(self.llm_client, "model_name", "gemini-3.5-flash-lite"), time.perf_counter() - llm_t0)
+        track_llm_call(
+            getattr(self.llm_client, "model_name", "gemini-3.5-flash-lite"),
+            time.perf_counter() - llm_t0,
+        )
 
         # 4. Step 4: Validate grounding citations (Rule 2)
         grounding_result = self.grounding_validator.validate(
@@ -286,7 +313,9 @@ class RiskAnalysisPipeline:
         output_dict = analysis.model_dump()
         output_dict["clause_id"] = clause_id
         output_dict["runtime_ms"] = elapsed_ms
-        output_dict["model_version"] = getattr(self.clause_llm, "last_model_version", None) or model_name
+        output_dict["model_version"] = (
+            getattr(self.clause_llm, "last_model_version", None) or model_name
+        )
         output_dict["grounding_precision"] = grounding_result.grounding_precision
         output_dict["is_grounded"] = grounding_result.is_valid
         output_dict["retrieved_references"] = [
@@ -304,6 +333,9 @@ class RiskAnalysisPipeline:
 
         # Cache validated result
         self._clause_cache[cache_key] = dict(output_dict)
+        from app.core.cancellation import record_cache_key
+
+        record_cache_key("clause", cache_key)
 
         return output_dict
 
@@ -314,7 +346,8 @@ class RiskAnalysisPipeline:
         jurisdiction: str | None = None,
         batch_size: int | None = None,
         max_concurrency: int = 3,
-        on_batch_complete: Callable[[list[tuple[int, dict[str, Any]]]], Awaitable[None]] | None = None,
+        on_batch_complete: Callable[[list[tuple[int, dict[str, Any]]]], Awaitable[None]]
+        | None = None,
     ) -> list[dict[str, Any]]:
         """
         Analyze a list of clauses in bounded-parallel batches using Gemini structured output.
@@ -371,6 +404,9 @@ class RiskAnalysisPipeline:
             return bool(getattr(limiter, "is_daily_quota_exhausted", False))
 
         async def process_chunk(batch_idx: int, chunk_indices: list[int]) -> None:
+            from app.core.cancellation import check_not_cancelled, record_cache_key
+
+            await check_not_cancelled()
             # Check shared daily quota status before acquiring semaphore
             if quota_exhausted_event.is_set() or _is_rate_limiter_exhausted():
                 raise DailyQuotaExceededError(
@@ -379,6 +415,7 @@ class RiskAnalysisPipeline:
                 )
 
             async with sem:
+                await check_not_cancelled()
                 if quota_exhausted_event.is_set() or _is_rate_limiter_exhausted():
                     raise DailyQuotaExceededError(
                         model_name=self.clause_model_name,
@@ -389,15 +426,19 @@ class RiskAnalysisPipeline:
 
                 # Step 3: Parallel vector retrieval for each clause in the chunk
                 t_ret_0 = time.perf_counter()
-                batch_retrievals = await asyncio.gather(*[
-                    self.retrieval_service.retrieve(
-                        query_text=c["clause_text"],
-                        query_vector=c.get("clause_vector"),
-                        top_k=self.settings.retrieval_top_k,
-                    )
-                    for c in batch_clauses
-                ])
+                batch_retrievals = await asyncio.gather(
+                    *[
+                        self.retrieval_service.retrieve(
+                            query_text=c["clause_text"],
+                            query_vector=c.get("clause_vector"),
+                            top_k=self.settings.retrieval_top_k,
+                        )
+                        for c in batch_clauses
+                    ]
+                )
                 chunk_retrieval_time = time.perf_counter() - t_ret_0
+
+                await check_not_cancelled()
 
                 batch_items_text = []
                 for b_idx, (c, r_resp) in enumerate(
@@ -423,24 +464,27 @@ class RiskAnalysisPipeline:
 
                 failed_indices = []
                 try:
-                    batch_res = await self.clause_llm.generate_structured(
-                        prompt=batch_prompt,
-                        response_model=LLMBatchClauseAnalysis,
-                        system_instruction=SYSTEM_INSTRUCTION,
-                    )
+                    with call_purpose("analyze"):
+                        batch_res = await self.clause_llm.generate_structured(
+                            prompt=batch_prompt,
+                            response_model=LLMBatchClauseAnalysis,
+                            system_instruction=SYSTEM_INSTRUCTION,
+                        )
                     call_m = getattr(self.clause_llm, "last_call_metrics", {})
                     async with telemetry_lock:
-                        self.last_batch_telemetry.append({
-                            "batch_index": batch_idx,
-                            "clause_count": len(batch_clauses),
-                            "retrieval_seconds": round(chunk_retrieval_time, 3),
-                            "latency_seconds": call_m.get("latency", 0.0),
-                            "input_tokens": call_m.get("input_tokens", 0),
-                            "output_tokens": call_m.get("output_tokens", 0),
-                            "retries": call_m.get("retries", 0),
-                            "repair_count": call_m.get("repair_count", 0),
-                            "rate_limiter_wait_seconds": call_m.get("rate_limiter_wait", 0.0),
-                        })
+                        self.last_batch_telemetry.append(
+                            {
+                                "batch_index": batch_idx,
+                                "clause_count": len(batch_clauses),
+                                "retrieval_seconds": round(chunk_retrieval_time, 3),
+                                "latency_seconds": call_m.get("latency", 0.0),
+                                "input_tokens": call_m.get("input_tokens", 0),
+                                "output_tokens": call_m.get("output_tokens", 0),
+                                "retries": call_m.get("retries", 0),
+                                "repair_count": call_m.get("repair_count", 0),
+                                "rate_limiter_wait_seconds": call_m.get("rate_limiter_wait", 0.0),
+                            }
+                        )
                     batch_items = getattr(batch_res, "items", [])
 
                     if len(batch_items) != len(batch_clauses):
@@ -452,7 +496,11 @@ class RiskAnalysisPipeline:
                         failed_indices = list(chunk_indices)
                     else:
                         for orig_idx, item, r_resp, c in zip(
-                            chunk_indices, batch_items, batch_retrievals, batch_clauses, strict=False
+                            chunk_indices,
+                            batch_items,
+                            batch_retrievals,
+                            batch_clauses,
+                            strict=False,
                         ):
                             allowed_ref_ids = {r.id.upper() for r in r_resp.results}
                             grounding = self.grounding_validator.validate(
@@ -486,10 +534,13 @@ class RiskAnalysisPipeline:
                                 # Cache validated result
                                 ckey = self._cache_key(c["clause_text"], model_name)
                                 self._clause_cache[ckey] = dict(res_dict)
+                                record_cache_key("clause", ckey)
                                 results[orig_idx] = res_dict
 
                 except DailyQuotaExceededError:
                     quota_exhausted_event.set()
+                    raise
+                except (CallBudgetExceededError, JobCancelledError, asyncio.CancelledError):
                     raise
                 except Exception as exc:
                     logger.warning("batch_llm_call_failed", error=str(exc))
@@ -497,6 +548,7 @@ class RiskAnalysisPipeline:
 
                 # Batch-only repair: repair only failed clauses as a mini-batch through the rate limiter.
                 # Strictly cap repair attempts; NEVER fall back to one-by-one calls (0 single-clause fallbacks).
+                await check_not_cancelled()
                 if (
                     failed_indices
                     and not quota_exhausted_event.is_set()
@@ -533,11 +585,12 @@ class RiskAnalysisPipeline:
                     )
 
                     try:
-                        repair_res = await self.clause_llm.generate_structured(
-                            prompt=repair_prompt,
-                            response_model=LLMBatchClauseAnalysis,
-                            system_instruction=SYSTEM_INSTRUCTION,
-                        )
+                        with call_purpose("repair"):
+                            repair_res = await self.clause_llm.generate_structured(
+                                prompt=repair_prompt,
+                                response_model=LLMBatchClauseAnalysis,
+                                system_instruction=SYSTEM_INSTRUCTION,
+                            )
                         repair_items = getattr(repair_res, "items", [])
                         still_failed = []
                         if len(repair_items) == len(repair_clauses):
@@ -576,6 +629,7 @@ class RiskAnalysisPipeline:
                                 res_dict["no_reference_found"] = r_resp.no_reference_found
                                 ckey = self._cache_key(c["clause_text"], model_name)
                                 self._clause_cache[ckey] = dict(res_dict)
+                                record_cache_key("clause", ckey)
                                 results[orig_idx] = res_dict
                         else:
                             still_failed = list(failed_indices)
@@ -613,7 +667,9 @@ class RiskAnalysisPipeline:
                             results[orig_idx] = safe_res
 
                     except Exception as repair_exc:
-                        logger.warning("mini_batch_repair_failed_safe_fallback", error=str(repair_exc))
+                        logger.warning(
+                            "mini_batch_repair_failed_safe_fallback", error=str(repair_exc)
+                        )
                         for orig_idx in failed_indices:
                             c = clauses[orig_idx]
                             r_resp = batch_retrievals[chunk_indices.index(orig_idx)]
@@ -646,20 +702,22 @@ class RiskAnalysisPipeline:
                             results[orig_idx] = safe_res
 
                 # Step 1: Stream partial results immediately upon batch completion
+                await check_not_cancelled()
                 if on_batch_complete:
                     completed_batch = [
-                        (idx, res)
-                        for idx in chunk_indices
-                        if (res := results[idx]) is not None
+                        (idx, res) for idx in chunk_indices if (res := results[idx]) is not None
                     ]
                     if completed_batch:
                         await on_batch_complete(completed_batch)
 
         # Launch batch tasks with bounded parallelism and initial stagger
+        from app.core.cancellation import cancel_aware_sleep, check_not_cancelled
+
         tasks = []
         for b_idx, chunk in enumerate(chunks):
+            await check_not_cancelled()
             if b_idx > 0 and b_idx < max_concurrency:
-                await asyncio.sleep(0.5)
+                await cancel_aware_sleep(0.5)
             tasks.append(asyncio.create_task(process_chunk(b_idx + 1, chunk)))
 
         try:
@@ -688,14 +746,16 @@ class RiskAnalysisPipeline:
         Computes holistic risk score, executive summary, category breakdown, and negotiation priorities.
         """
         if not clause_results:
-            return DocumentRiskAnalysis.model_validate({
-                "overall_risk_score": 0,
-                "overall_risk_level": "LOW",
-                "executive_summary": "No clauses provided for document analysis.",
-                "key_risks": [],
-                "category_breakdown": {},
-                "negotiation_priorities": [],
-            })
+            return DocumentRiskAnalysis.model_validate(
+                {
+                    "overall_risk_score": 0,
+                    "overall_risk_level": "LOW",
+                    "executive_summary": "No clauses provided for document analysis.",
+                    "key_risks": [],
+                    "category_breakdown": {},
+                    "negotiation_priorities": [],
+                }
+            )
 
         # 1. Compute statistical aggregations
         total_clauses = len(clause_results)
@@ -722,19 +782,28 @@ class RiskAnalysisPipeline:
                 high_risk_summaries.append(summary_line)
 
                 if len(priorities) < 5:
-                    priorities.append({
-                        "clause_id": c.get("clause_id"),
-                        "risk_level": lvl,
-                        "risk_score": score,
-                        "issue": c.get("risk_reasons", ["Asymmetric risk"])[0] if c.get("risk_reasons") else "Asymmetric risk",
-                        "suggested_change": c.get("suggested_rewrite") or "Seek mutual reciprocity or eliminate unilateral clause.",
-                    })
+                    priorities.append(
+                        {
+                            "clause_id": c.get("clause_id"),
+                            "risk_level": lvl,
+                            "risk_score": score,
+                            "issue": c.get("risk_reasons", ["Asymmetric risk"])[0]
+                            if c.get("risk_reasons")
+                            else "Asymmetric risk",
+                            "suggested_change": c.get("suggested_rewrite")
+                            or "Seek mutual reciprocity or eliminate unilateral clause.",
+                        }
+                    )
 
         # Category breakdown
         breakdown: dict[str, Any] = {}
         for cat, scores in categories.items():
             max_s = max(scores)
-            max_lvl: RiskLevel = "CRITICAL" if max_s >= 75 else ("HIGH" if max_s >= 50 else ("MEDIUM" if max_s >= 25 else "LOW"))
+            max_lvl: RiskLevel = (
+                "CRITICAL"
+                if max_s >= 75
+                else ("HIGH" if max_s >= 50 else ("MEDIUM" if max_s >= 25 else "LOW"))
+            )
             breakdown[cat] = {
                 "clause_count": len(scores),
                 "avg_score": round(sum(scores) / len(scores)),
@@ -779,15 +848,37 @@ class RiskAnalysisPipeline:
             jurisdiction=resolve_jurisdiction(jurisdiction),
             total_clauses=total_clauses,
             retrieval_reference_status=ref_status_str,
-            clause_summaries="\n\n".join(high_risk_summaries[:10]) if high_risk_summaries else "All clauses standard.",
+            clause_summaries="\n\n".join(high_risk_summaries[:10])
+            if high_risk_summaries
+            else "All clauses standard.",
         )
 
-        doc_analysis = await self.summary_llm.generate_structured(
-            prompt=prompt,
-            response_model=DocumentRiskAnalysis,
-            system_instruction=SYSTEM_INSTRUCTION,
-        )
+        from app.core.cancellation import check_not_cancelled
+
+        await check_not_cancelled()
+        with call_purpose("summary"):
+            doc_analysis = await self.summary_llm.generate_structured(
+                prompt=prompt,
+                response_model=DocumentRiskAnalysis,
+                system_instruction=SYSTEM_INSTRUCTION,
+            )
         self.last_summary_telemetry = dict(getattr(self.summary_llm, "last_call_metrics", {}))
+
+        # Enforce reference-grounding wording constraints strictly regardless of LLM output
+        summary_text = (doc_analysis.executive_summary or "").strip()
+        if not has_real_references:
+            import re as _re
+
+            summary_text = _re.sub(
+                r"\baligns?\s+with\s+typical\s+standards?\b",
+                "is evaluated conservatively on baseline fairness",
+                summary_text,
+                flags=_re.IGNORECASE,
+            )
+            if "no close reference found" not in summary_text.lower():
+                prefix = "No close reference found in standard precedent knowledge base."
+                summary_text = f"{prefix} {summary_text}".strip()
+        doc_analysis.executive_summary = summary_text
 
         # Merge calculated breakdown and priorities with LLM summary
         doc_analysis.overall_risk_score = avg_score
@@ -816,7 +907,8 @@ class RiskAnalysisPipeline:
             "risk_distribution": res.category_breakdown,
             "recommendations": res.key_risks,
             "disclaimer": res.disclaimer,
-            "model_version": getattr(self.summary_llm, "last_model_version", None) or self.summary_model_name,
+            "model_version": getattr(self.summary_llm, "last_model_version", None)
+            or self.summary_model_name,
         }
 
 

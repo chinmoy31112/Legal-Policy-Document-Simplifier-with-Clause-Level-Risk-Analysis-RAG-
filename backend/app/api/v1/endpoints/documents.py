@@ -5,28 +5,30 @@ Handles document upload, listing, detail retrieval, and deletion.
 """
 
 import asyncio
+import json
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     File,
     Form,
     HTTPException,
     Query,
+    Response,
     UploadFile,
     status,
 )
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.rate_limiter import get_model_rate_limiter
 from app.api.v1.deps import get_current_user_id, get_pagination
 from app.core.config import get_settings
-from app.core.database import async_session_factory
 from app.core.logging import get_logger
 from app.dependencies import get_db_session
+from app.repositories.job_repo import JobRepository
 from app.schemas.analysis import (
     AnalysisStatusResponse,
     ClauseAnalysisResponse,
@@ -43,35 +45,14 @@ from app.schemas.document import (
 from app.services.analysis_service import AnalysisService
 from app.services.document_service import DocumentService
 from app.services.export_service import ExportService
+from app.services.job_service import JobService, format_user_failure_message
 
 logger = get_logger(__name__)
 
 router = APIRouter()
 
-# Active in-flight background analysis tasks indexed by document_id for instant cancellation
+# Legacy/test in-process task map retained strictly for cooperative cancel hooks in tests
 _active_analysis_tasks: dict[UUID, asyncio.Task] = {}
-
-
-async def run_analysis_background(document_id: UUID):
-    """Helper to run the analysis task with a fresh database session."""
-    current_task = asyncio.current_task()
-    if current_task:
-        _active_analysis_tasks[document_id] = current_task
-    try:
-        async with async_session_factory() as session:
-            service = AnalysisService(session)
-            await service._run_analysis_task(document_id)
-    except asyncio.CancelledError:
-        logger.info("analysis_background_task_cancelled", document_id=str(document_id))
-        raise
-    except Exception as exc:
-        logger.error(
-            "analysis_background_task_unhandled_error",
-            document_id=str(document_id),
-            error=str(exc),
-        )
-    finally:
-        _active_analysis_tasks.pop(document_id, None)
 
 
 @router.post(
@@ -94,14 +75,13 @@ async def run_analysis_background(document_id: UUID):
     include_in_schema=False,
 )
 async def upload_document(
-    background_tasks: BackgroundTasks,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
     file: UploadFile = File(...),
     document_type: str = Form(default="other"),
     jurisdiction: str | None = Form(default=None),
 ):
-    """Upload and start analysis on a document."""
+    """Upload document and enqueue analysis job onto persistent ARQ worker queue."""
     service = DocumentService(session)
     document = await service.upload_document(
         user_id=user_id,
@@ -110,12 +90,13 @@ async def upload_document(
         jurisdiction=jurisdiction,
     )
 
-    # Trigger background analysis
-    background_tasks.add_task(run_analysis_background, document.id)
+    # Enqueue in persistent ARQ worker queue (never run analysis inside the API process)
+    job_service = JobService(session)
+    await job_service.enqueue_document_analysis(document_id=document.id, user_id=user_id)
 
     return APIResponse(
         data=DocumentUploadResponse.model_validate(document),
-        message="Document uploaded successfully. Analysis started.",
+        message="Document uploaded successfully. Analysis queued for background worker.",
     )
 
 
@@ -183,18 +164,20 @@ async def delete_document(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
-    """Delete a document and its associated data."""
+    """Cancel active jobs, delete document/clauses/results/caches, and report purged/kept items."""
     service = DocumentService(session)
-    # Check ownership and existence before cancelling task or deleting
-    await service.get_document(document_id, user_id)
-
-    # Cancel any active running analysis task immediately to stop burning API quota
-    active_task = _active_analysis_tasks.pop(document_id, None)
-    if active_task and not active_task.done():
-        active_task.cancel()
-        logger.info("cancelled_active_analysis_task_on_delete", document_id=str(document_id))
-
-    await service.delete_document(document_id, user_id)
+    report = await service.delete_document(
+        document_id,
+        user_id,
+        legacy_tasks_map=_active_analysis_tasks,
+    )
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT,
+        headers={
+            "X-Purged-Summary": json.dumps(report["purged"]),
+            "X-Kept-Summary": json.dumps(report["kept"]),
+        },
+    )
 
 
 @router.get(
@@ -212,20 +195,51 @@ async def get_document_status(
     service = DocumentService(session)
     document = await service.get_document(document_id, user_id)
 
+    job_repo = JobRepository(session)
+    latest_job = await job_repo.get_latest_for_document(document.id)
+
     status_str = document.status.lower()
     progress_map = {
         "uploaded": (0.10, "Document uploaded, queued for processing"),
+        "queued": (0.10, "Queued for background worker"),
         "extracting": (0.30, "Extracting text and layout spans"),
         "segmenting": (0.50, "Segmenting into logical legal clauses"),
         "analyzing": (0.75, "Retrieving reference clauses and assessing risk"),
-        "waiting for quota": (0.75, "Daily API quota reached. Job paused and will resume automatically after reset."),
+        "waiting for quota": (
+            0.75,
+            "Daily API quota reached. Job paused and will resume automatically after reset.",
+        ),
+        "waiting_for_quota": (
+            0.75,
+            "Daily API quota reached. Job paused and will resume automatically after reset.",
+        ),
+        "cancelling": (0.90, "Stopping analysis..."),
+        "cancelled": (1.00, "Analysis cancelled"),
+        "interrupted": (0.50, "Analysis interrupted by restart; ready to retry"),
         "completed": (1.00, "Analysis complete"),
         "failed": (1.00, "Document processing failed"),
     }
     progress, current_step = progress_map.get(status_str, (0.0, "Unknown state"))
-    quota_msg = None
+    status_message = None
     if document.metadata_ and isinstance(document.metadata_, dict):
-        quota_msg = document.metadata_.get("quota_notice")
+        status_message = document.metadata_.get("quota_notice")
+
+    job_status_str = (latest_job.status or "").lower() if latest_job else ""
+    if status_str in ("failed", "interrupted") or job_status_str in ("failed", "interrupted"):
+        effective_fail_status = (
+            job_status_str if job_status_str in ("failed", "interrupted") else status_str
+        )
+        status_message = format_user_failure_message(
+            latest_job.error_message if latest_job else None,
+            status=effective_fail_status,
+        )
+
+    total_clauses = latest_job.total_clauses if latest_job else len(document.clauses or [])
+    analyzed_clauses = (
+        latest_job.completed_clauses if latest_job else len(document.analysis_results or [])
+    )
+    if status_str == "completed" and total_clauses > 0:
+        analyzed_clauses = total_clauses
 
     return APIResponse(
         data=AnalysisStatusResponse(
@@ -233,8 +247,42 @@ async def get_document_status(
             status=document.status,
             progress=progress,
             current_step=current_step,
-            message=quota_msg,
+            total_clauses=total_clauses,
+            analyzed_clauses=analyzed_clauses,
+            message=status_message,
+            job_id=latest_job.id if latest_job else None,
+            job_status=latest_job.status if latest_job else None,
+            stage=latest_job.stage if latest_job else status_str,
         )
+    )
+
+
+@router.get(
+    "/{document_id}/events",
+    summary="Stream live analysis events via SSE",
+    description="Listen to server-sent events for batch completions, clause updates, and provisional scores.",
+)
+@router.get("/{document_id}/stream", include_in_schema=False)
+async def stream_document_events(
+    document_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
+    """Stream live Server-Sent Events (SSE) for document analysis progress."""
+    service = DocumentService(session)
+    await service.get_document(document_id, user_id)
+
+    from app.core.sse import get_sse_broadcaster
+
+    broadcaster = get_sse_broadcaster()
+    return StreamingResponse(
+        broadcaster.subscribe(str(document_id)),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
@@ -246,18 +294,20 @@ async def get_document_status(
 )
 async def resume_document_analysis(
     document_id: UUID,
-    background_tasks: BackgroundTasks,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
-    """Resume analysis for a document in 'waiting for quota' or 'failed' status."""
+    """Resume analysis for a document in 'waiting for quota', 'failed', 'interrupted', or 'cancelled' status."""
     service = DocumentService(session)
     document = await service.get_document(document_id, user_id)
 
-    if document.status not in ["waiting for quota", "failed"]:
+    if document.status not in ["waiting for quota", "failed", "interrupted", "cancelled"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot resume document in '{document.status}' status. Only 'waiting for quota' or 'failed' can be resumed.",
+            detail=(
+                f"Cannot resume document in '{document.status}' status. "
+                "Only 'waiting for quota', 'failed', 'interrupted', or 'cancelled' can be resumed."
+            ),
         )
 
     # Reset any rate limiter daily exhausted flag for the models
@@ -265,21 +315,24 @@ async def resume_document_analysis(
     get_model_rate_limiter(settings.gemini_clause_model).reset_daily_quota_exhausted()
     get_model_rate_limiter(settings.gemini_summary_model).reset_daily_quota_exhausted()
 
-    # Update document status back to analyzing
+    # Update document status and enqueue job via persistent ARQ worker queue
     analysis_service = AnalysisService(session)
-    await analysis_service.document_repo.update_status(document_id, "analyzing")
+    await analysis_service.document_repo.update_status(document_id, "uploaded")
     await session.commit()
 
-    # Enqueue background task (AnalysisService safely skips already completed clauses)
-    background_tasks.add_task(run_analysis_background, document_id)
+    job_service = JobService(session)
+    job = await job_service.enqueue_document_analysis(document_id=document_id, user_id=user_id)
 
     return APIResponse(
         data=AnalysisStatusResponse(
             document_id=document.id,
-            status="analyzing",
-            progress=0.75,
-            current_step="Resuming analysis of remaining clauses",
-            message="Analysis resumed successfully.",
+            status="uploaded",
+            progress=0.10,
+            current_step="Queued to resume remaining clauses",
+            message="Analysis queued in background worker.",
+            job_id=job.id,
+            job_status=job.status,
+            stage=job.stage,
         ),
         message="Document analysis resumed.",
     )
@@ -337,6 +390,7 @@ async def export_document_json(
 ):
     """Export document analysis as JSON."""
     from fastapi.responses import JSONResponse
+
     service = ExportService(session)
     data = await service.export_json(document_id, user_id)
     filename = f"{data['document']['filename']}_risk_analysis.json"
@@ -358,6 +412,7 @@ async def export_document_markdown(
 ):
     """Export document analysis as Markdown."""
     from fastapi import Response
+
     service = ExportService(session)
     md_content = await service.export_markdown(document_id, user_id)
     doc = await service._get_authorized_document(document_id, user_id)
@@ -381,6 +436,7 @@ async def export_document_pdf(
 ):
     """Export document analysis as PDF."""
     from fastapi import Response
+
     service = ExportService(session)
     pdf_bytes = await service.export_pdf(document_id, user_id)
     doc = await service._get_authorized_document(document_id, user_id)

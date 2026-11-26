@@ -40,7 +40,8 @@ services:
       dockerfile: Dockerfile
     container_name: legal_simplifier_backend
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/legal_simplifier
       REDIS_URL: redis://redis:6379/0
@@ -69,7 +70,8 @@ services:
       dockerfile: Dockerfile
     container_name: legal_simplifier_worker
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/legal_simplifier
       REDIS_URL: redis://redis:6379/0

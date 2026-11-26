@@ -5,6 +5,8 @@ Creates and configures the FastAPI application with all middleware,
 exception handlers, routers, and lifecycle events.
 """
 
+import asyncio
+import contextlib
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -46,7 +48,47 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     for warn_msg in settings.check_pinned_models():
         logger.warning("gemini_model_non_pinned_warning", warning=warn_msg)
 
+    # Mark any jobs left in 'running' state after an unclean shutdown as 'interrupted'
+    reaper_task: asyncio.Task[None] | None = None
+    try:
+        from app.core.database import async_session_factory
+        from app.services.job_service import JobService
+
+        async def _startup_recover() -> None:
+            async with async_session_factory() as db_sess:
+                job_service = JobService(db_sess)
+                await job_service.mark_interrupted_on_startup()
+                await job_service.reap_orphan_jobs()
+
+        await asyncio.wait_for(_startup_recover(), timeout=3.0)
+    except Exception as exc:
+        logger.warning("startup_job_recovery_skipped", error=str(exc))
+
+    # Periodic orphan job reaper inside API lifespan (skipped during unit tests)
+    if settings.app_env != "test":
+
+        async def _periodic_reaper_loop() -> None:
+            from app.core.database import async_session_factory
+            from app.services.job_service import JobService
+
+            while True:
+                await asyncio.sleep(30.0)
+                try:
+                    async with async_session_factory() as db_sess:
+                        await JobService(db_sess).reap_orphan_jobs()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    logger.warning("periodic_orphan_reaper_error", error=str(exc))
+
+        reaper_task = asyncio.create_task(_periodic_reaper_loop())
+
     yield
+
+    if reaper_task is not None and not reaper_task.done():
+        reaper_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await reaper_task
 
     logger.info("application_shutting_down")
 
@@ -60,7 +102,7 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         description=(
             "AI-powered legal document analyzer with clause-level risk assessment "
-            "using Retrieval-Augmented Generation (RAG). Powered by Google Gemini."
+            "using Retrieval-Augmented Generation (RAG)."
         ),
         docs_url="/docs",
         redoc_url="/redoc",

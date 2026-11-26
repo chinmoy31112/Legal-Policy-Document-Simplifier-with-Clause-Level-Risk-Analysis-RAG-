@@ -16,9 +16,12 @@ RiskLevel = Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
 
 class GroundedReason(BaseModel):
     """Specific risk reason with explicit citation grounding."""
+
     reason: str = Field(..., description="Explanation of why the clause poses risk or imbalance.")
     quote: str | None = Field(None, description="Exact verbatim quote from the target clause.")
-    reference_id: str | None = Field(None, description="Retrieved reference clause ID (e.g. REF-LIAB-001).")
+    reference_id: str | None = Field(
+        None, description="Retrieved reference clause ID (e.g. REF-LIAB-001)."
+    )
 
 
 class LLMClauseAnalysis(BaseModel):
@@ -26,6 +29,7 @@ class LLMClauseAnalysis(BaseModel):
     Structured clause risk analysis and plain English simplification.
     Validated schema for Gemini structured output.
     """
+
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
     plain_english: str = Field(
@@ -97,6 +101,7 @@ class LLMClauseAnalysis(BaseModel):
 
 class LLMBatchClauseAnalysis(BaseModel):
     """Batch clause risk analysis result containing an array of clause analyses."""
+
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
     items: list[LLMClauseAnalysis] = Field(
@@ -107,10 +112,15 @@ class LLMBatchClauseAnalysis(BaseModel):
 
 class DocumentRiskAnalysis(BaseModel):
     """Document-level aggregated risk assessment."""
+
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
-    overall_risk_score: int = Field(..., ge=0, le=100, description="Indicative holistic risk score 0-100.")
-    overall_risk_level: RiskLevel = Field(..., description="Overall document risk tier (LOW, MEDIUM, HIGH, CRITICAL).")
+    overall_risk_score: int = Field(
+        ..., ge=0, le=100, description="Indicative holistic risk score 0-100."
+    )
+    overall_risk_level: RiskLevel = Field(
+        ..., description="Overall document risk tier (LOW, MEDIUM, HIGH, CRITICAL)."
+    )
     executive_summary: str = Field(
         ...,
         alias="overall_summary",
@@ -149,6 +159,7 @@ LLMDocumentSummary = DocumentRiskAnalysis
 
 class DocumentClassification(BaseModel):
     """Result of classifying whether an uploaded file is a legal/policy document."""
+
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
     is_legal_document: bool = Field(
@@ -169,4 +180,3 @@ class DocumentClassification(BaseModel):
         default="",
         description="Brief explanation of classification.",
     )
-

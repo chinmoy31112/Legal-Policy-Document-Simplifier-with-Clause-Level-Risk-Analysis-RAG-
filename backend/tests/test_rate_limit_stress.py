@@ -87,7 +87,9 @@ async def test_20_concurrent_documents_stress_with_simulated_429():
         embedding_call_count += 1
         if embedding_call_count % 3 == 1:
             embedding_429_count += 1
-            raise Exception("429 RESOURCE_EXHAUSTED: Embed content requests per minute limit exceeded. Please retry in 0.05s.")
+            raise Exception(
+                "429 RESOURCE_EXHAUSTED: Embed content requests per minute limit exceeded. Please retry in 0.05s."
+            )
 
         resp = MagicMock()
         contents = kwargs.get("contents") or (args[1] if len(args) > 1 else ["test"])
@@ -100,32 +102,42 @@ async def test_20_concurrent_documents_stress_with_simulated_429():
         llm_call_count += 1
         if llm_call_count % 3 == 1:
             llm_429_count += 1
-            raise Exception("429 RESOURCE_EXHAUSTED: Generate content requests per minute limit exceeded. Please retry in 0.05s.")
+            raise Exception(
+                "429 RESOURCE_EXHAUSTED: Generate content requests per minute limit exceeded. Please retry in 0.05s."
+            )
 
         resp = MagicMock()
         contents = str(kwargs.get("contents", ""))
-        if "CLAUSE-LEVEL FINDINGS" in contents or "Synthesize" in contents or "executive summary" in contents.lower():
-            resp.text = json.dumps({
-                "overall_risk_score": 30,
-                "overall_risk_level": "MEDIUM",
-                "overall_summary": "Standard agreement with minor concerns.",
-                "executive_summary": "Standard agreement with minor concerns.",
-                "key_risks": ["Review liability limit."],
-                "category_breakdown": {"liability": 1},
-                "negotiation_priorities": [],
-                "disclaimer": "Legal disclaimer text.",
-            })
+        if (
+            "CLAUSE-LEVEL FINDINGS" in contents
+            or "Synthesize" in contents
+            or "executive summary" in contents.lower()
+        ):
+            resp.text = json.dumps(
+                {
+                    "overall_risk_score": 30,
+                    "overall_risk_level": "MEDIUM",
+                    "overall_summary": "Standard agreement with minor concerns.",
+                    "executive_summary": "Standard agreement with minor concerns.",
+                    "key_risks": ["Review liability limit."],
+                    "category_breakdown": {"liability": 1},
+                    "negotiation_priorities": [],
+                    "disclaimer": "Legal disclaimer text.",
+                }
+            )
         else:
-            resp.text = json.dumps({
-                "risk_level": "LOW",
-                "risk_score": 15,
-                "confidence": 0.95,
-                "plain_english": "Standard mutual clause.",
-                "risk_reasons": ['Standard clause quoting "mutual indemnification".'],
-                "missing_protections": [],
-                "suggested_rewrite": None,
-                "legal_review_note": None,
-            })
+            resp.text = json.dumps(
+                {
+                    "risk_level": "LOW",
+                    "risk_score": 15,
+                    "confidence": 0.95,
+                    "plain_english": "Standard mutual clause.",
+                    "risk_reasons": ['Standard clause quoting "mutual indemnification".'],
+                    "missing_protections": [],
+                    "suggested_rewrite": None,
+                    "legal_review_note": None,
+                }
+            )
         return resp
 
     mock_client = MagicMock()
@@ -170,21 +182,21 @@ async def test_20_concurrent_documents_stress_with_simulated_429():
         }
 
     # Execute all 20 documents concurrently under 429 stress
-    with patch("app.ai.llm.calculate_jittered_backoff", return_value=0.01), patch(
-        "app.ai.embedding.calculate_jittered_backoff", return_value=0.01
-    ), patch(
-        "tenacity.wait_exponential.__call__", return_value=0.01
+    with (
+        patch("app.ai.llm.calculate_jittered_backoff", return_value=0.01),
+        patch("app.ai.embedding.calculate_jittered_backoff", return_value=0.01),
+        patch("tenacity.wait_exponential.__call__", return_value=0.01),
     ):
-        results = await asyncio.gather(*[
-            process_simulated_document(i) for i in range(total_docs)
-        ], return_exceptions=True)
+        results = await asyncio.gather(
+            *[process_simulated_document(i) for i in range(total_docs)], return_exceptions=True
+        )
 
     # ─────────────────────────────────────────────────────────────────────────
     # Verification & Assertions
     # ─────────────────────────────────────────────────────────────────────────
-    failed_jobs = []
-    unhandled_429s = []
-    completed_jobs = []
+    failed_jobs: list[Any] = []
+    unhandled_429s: list[Exception] = []
+    completed_jobs: list[dict[str, Any]] = []
 
     for r in results:
         if isinstance(r, Exception):

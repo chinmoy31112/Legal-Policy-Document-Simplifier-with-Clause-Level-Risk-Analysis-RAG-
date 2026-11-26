@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo "Running pre-push CI gate (make ci)..."
+if command -v make >/dev/null 2>&1; then
+    exec make ci
+elif [ -x "backend/venv/Scripts/python.exe" ]; then
+    exec backend/venv/Scripts/python.exe scripts/run_ci.py
+elif [ -x "backend/venv/bin/python" ]; then
+    exec backend/venv/bin/python scripts/run_ci.py
+else
+    exec python scripts/run_ci.py
+fi

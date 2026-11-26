@@ -7,7 +7,17 @@
 
 ## 🌟 Executive Summary & Key Metrics
 
-The **Legal & Policy Document Simplifier** is a production-grade, enterprise portfolio platform designed to demystify complex legal contracts, Terms of Service, NDAs, and privacy policies. Rather than summarizing documents as arbitrary blobs of text, the system strictly decomposes contracts at the **clause level**, benchmarks every clause against a curated knowledge base of 200 standard commercial provisions via **Retrieval-Augmented Generation (RAG)**, and computes objective risk ratings with verifiable citations.
+The **Legal & Policy Document Simplifier** demystifies complex legal contracts, Powers of Attorney, Terms of Service, NDAs, and privacy policies. Instead of giving a vague generic summary, it splits each document into individual **clauses**, retrieves matching standard clauses from a curated 200-clause reference library (**RAG**), and returns plain-English explanations, risk scores, citations, and safer suggested rewrites.
+
+### 🧩 How It Works (Beginner Overview)
+
+If you are running this project for the first time, think of the app as **3 small apps working together**:
+
+1. **Frontend (`Next.js` on port `3000`)** — The web UI where you log in, upload PDFs/DOCX files, and read the side-by-side clause risk report.
+2. **Backend Web API (`FastAPI` via `uvicorn` on port `8000`)** — Handles login, saves your uploaded file, stores records in **PostgreSQL**, and puts an analysis job into the **Redis** queue (status starts as `queued`).
+3. **Background AI Worker (`ARQ`, `python -m app.workers.main`)** — Watches the Redis queue, extracts text/clauses, checks caches, calls **Google Gemini** safely within rate limits, saves results to **PostgreSQL**, and streams live progress back to your browser.
+
+> **Tip for beginners:** Both `uvicorn` (Terminal 1) **and** the background worker (Terminal 2) must be running locally. If `uvicorn` is running without the worker, you can log in and upload files, but uploads will stay in **`queued`** until the worker starts.
 
 ### 📊 Benchmark Performance Matrix
 
@@ -86,7 +96,7 @@ flowchart TD
     subgraph Reasoning ["3. Structured Reasoning & Risk Engine"]
         VectorDB --> Retriever[Cosine Similarity Top-K\nThreshold Gating >= 0.70]
         Retriever --> PromptEng[Security Delimiter Isolation\n<<<UNTRUSTED_DOCUMENT_CLAUSE>>>]
-        PromptEng --> Gemini[Google gemini-3.5-flash-lite\nBatch Clause Analysis size 4]
+        PromptEng --> Gemini[Google gemini-3.5-flash-lite\nBatch Clause Analysis size 8]
         Gemini --> Validator[Grounding Validator\nCitation & Quote Enforcement]
         Validator -.->|Grounding Repair Loop| Gemini
     end
@@ -106,7 +116,7 @@ The application is engineered with explicit, pinned Gemini model configurations 
 
 | Role | Configured Model | RPM Throttle | Daily Budget (RPD) | Batch Size | Quota Pacing Behavior |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| **Clause Risk Analysis** | `gemini-3.5-flash-lite` (pinned) | **12 RPM** | **400 RPD** | 4 clauses / call | Throttled sliding window |
+| **Clause Risk Analysis** | `gemini-3.5-flash-lite` (pinned) | **12 RPM** | **400 RPD** | 8 clauses / call | Throttled sliding window |
 | **Executive Summary** | `gemini-3.5-flash-lite` (pinned) | **12 RPM** | **400 RPD** | 1 call / document | Throttled sliding window |
 | **Optional Escalation** | `gemini-3.8-flash` (off by default) | **4 RPM** | **16 RPD** | 5 clauses / call | Off by default |
 | **Clause Embedding** | `gemini-embedding-2` | **80 RPM** | **1,000 RPD** | 50 clauses / batch | Multi-doc shared hash cache |
@@ -142,7 +152,7 @@ The application is engineered with explicit, pinned Gemini model configurations 
 
 ### ADR-004: Model Pinning & Free-Tier Quota Engineering
 - **Context:** Frequent changes in Gemini API aliases (`-latest`) cause unexpected prompt drift, and free-tier limits trigger 429 errors.
-- **Decision:** Pin default model strings to `gemini-3.5-flash-lite`, omit unsupported temperature/top_p parameters, enforce a 12 RPM / 400 RPD budget via Redis, batch analysis at 4 clauses/call, and store resolved model versions in all results.
+- **Decision:** Pin default model strings to `gemini-3.5-flash-lite`, omit unsupported temperature/top_p parameters, enforce a 12 RPM / 400 RPD budget via Redis, batch analysis at 8 clauses/call (up to 3 concurrent batches), and store resolved model versions in all results.
 - **Consequences:** Predictable deterministic behavior, 0 unhandled 429 errors, and zero API parameter rejection errors.
 
 </details>
@@ -161,7 +171,7 @@ The application is engineered with explicit, pinned Gemini model configurations 
 | **Clause Segmentation** | Multi-pass structural heuristic segmentation preserving parent-child hierarchy and bounding boxes. | Multimodal vision-based segmentation; layout-LM transformer segmenters. |
 | **Knowledge Base** | Curated 200 reference clauses (CC BY 4.0 / CC0) stored in `pgvector` with exact metadata. | User-customized organizational rulebooks and proprietary libraries. |
 | **Risk Analysis** | Clause-level risk rating (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`), plain-English simplification, balanced rewrite, and grounded citations. | Multi-clause cross-reference conflict detection; redline track changes. |
-| **Exports** | Standard JSON and structured Markdown export with legal disclaimers. | Annotated PDF export with visual highlights and margin notes. |
+| **Exports** | JSON, Markdown, and Executive PDF risk report exports with legal disclaimers. | Source-page annotated PDF export with visual highlights and margin notes. |
 | **Compliance & Privacy**| Per-user row-level data isolation, zero document text logging, `delete-my-data` GDPR cascade deletion. | SOC2 Type II automated compliance audit logs. |
 
 ### Enterprise Risk Register
@@ -304,11 +314,15 @@ All API routes are prefixed under `/api/v1` and return strict JSON payloads:
 | **Documents** | `POST` | `/api/v1/documents` | Upload document (`.pdf`, `.docx`, `.txt`, `.md`, `.json`) & start analysis | Yes |
 | **Documents** | `GET` | `/api/v1/documents` | List paginated documents with status and category filters | Yes |
 | **Documents** | `GET` | `/api/v1/documents/{id}` | Get processing status, document metadata, and progress | Yes |
+| **Documents** | `GET` | `/api/v1/documents/{id}/events` | Stream live analysis progress updates via Server-Sent Events (SSE) | Yes |
+| **Documents** | `POST` | `/api/v1/documents/{id}/resume` | Resume an interrupted, failed, or quota-paused analysis job | Yes |
 | **Documents** | `DELETE`| `/api/v1/documents/{id}` | Permanently delete a document, disk files, and analyses | Yes |
 | **Analysis** | `GET` | `/api/v1/documents/{id}/clauses` | Retrieve clause-by-clause risk analyses and bounding boxes | Yes |
 | **Analysis** | `GET` | `/api/v1/documents/{id}/analysis` | Get executive summary, overall risk score, and negotiation priorities | Yes |
 | **Export** | `GET` | `/api/v1/documents/{id}/export/json` | Export full document risk analysis report as validated JSON | Yes |
 | **Export** | `GET` | `/api/v1/documents/{id}/export/markdown`| Export structured Markdown report with legal disclaimers | Yes |
+| **Export** | `GET` | `/api/v1/documents/{id}/export/pdf` | Export paginated PDF risk report with category breakdown & rewrites | Yes |
+| **Telemetry** | `GET` | `/api/v1/admin/ledger/today` | Inspect today's outbound AI call counts and retries by purpose | Yes |
 | **Knowledge Base** | `GET` | `/api/v1/knowledge-base/clauses` | Browse curated reference clauses with similarity search | Yes |
 | **Knowledge Base** | `POST`| `/api/v1/knowledge-base/ingest` | Ingest external PDF/JSON into reference knowledge base | Yes (Admin) |
 | **System** | `GET` | `/health/live` | Kubernetes / container liveness probe | No |
@@ -348,129 +362,158 @@ Total Benchmark Clauses: 200
 
 ---
 
-## 🚀 Quickstart & Deployment
+## 🚀 Quickstart & Step-by-Step Setup
 
-### Option 1: Docker Compose (Recommended)
+### What You Need Before Starting
+- **Google Gemini API Key** from [Google AI Studio](https://aistudio.google.com/) *(note: free-tier API keys may allow Google to use prompts to improve models; link a billing account / paid tier for confidential contracts)*
+- **Either:**
+  - **Docker Desktop** *(easiest — starts everything in one command)*, **or**
+  - **Local tools:** Python `3.11+`, Node.js `20+`, PostgreSQL `16`, and Redis `7`.
 
-1. **Clone repository and configure environment:**
+---
+
+### Option 1: Docker Compose (Easiest, All-in-One)
+
+1. **Clone the repo and create `backend/.env`:**
    ```bash
-   git clone https://github.com/your-org/legal-document-simplifier.git
-   cd legal-document-simplifier
-   cp .env.example backend/.env
+   git clone https://github.com/chinmoy31112/Legal-Policy-Document-Simplifier-with-Clause-Level-Risk-Analysis-RAG-.git
+   cd Legal-Policy-Document-Simplifier-with-Clause-Level-Risk-Analysis-RAG-
+   cp backend/.env.example backend/.env
    ```
 
-2. **Add your Google Gemini API Key in `backend/.env`:**
+2. **Open `backend/.env` and set your `GOOGLE_API_KEY` (and change `JWT_SECRET_KEY` before deploying):**
    ```env
    GOOGLE_API_KEY=your_actual_gemini_api_key_here
    ```
 
-3. **Launch the multi-container stack:**
+3. **Start all 5 services (Postgres + pgvector, Redis, API, Worker, Frontend):**
    ```bash
    docker compose up --build -d
    ```
-   **Services running:**
-   - `postgres`: PostgreSQL 16 with `pgvector` on port `5432`
-   - `redis`: Redis 7 Alpine rate limiter and job broker on port `6379`
-   - `backend`: FastAPI API gateway with Prometheus metrics on port `8000`
-   - `worker`: ARQ background processing worker
-   - `frontend`: Next.js 16 Web Dashboard on port `3000`
 
-4. **Access the platform:**
-   - Web Application: [http://localhost:3000](http://localhost:3000)
-   - Interactive API Docs (Swagger): [http://localhost:8000/docs](http://localhost:8000/docs)
-   - Prometheus Metrics: [http://localhost:8000/metrics](http://localhost:8000/metrics)
+4. **Open in your browser:**
+   - Web App: [http://localhost:3000](http://localhost:3000)
+   - API Docs (Swagger): [http://localhost:8000/docs](http://localhost:8000/docs)
+   - Health Check: [http://localhost:8000/health/live](http://localhost:8000/health/live)
 
 ---
 
-### Option 2: Bare Metal Local Development
+### Option 2: Run Locally Without Docker (3 Terminals)
 
-#### 1. Backend Setup
-```bash
+Make sure **PostgreSQL** (`localhost:5432`, database `legal_simplifier`) and **Redis** (`localhost:6379`) are running on your computer first, and add your `GOOGLE_API_KEY` inside `backend/.env`.
+
+#### One-Time Backend Setup & Database Migration
+```powershell
 cd backend
 python -m venv venv
 
-# Windows
-.\venv\Scripts\activate
-# Linux/macOS
-source venv/bin/activate
+# Activate virtual environment (Windows PowerShell):
+.\venv\Scripts\Activate.ps1
+# (On macOS/Linux run: source venv/bin/activate)
 
 pip install -r requirements.txt
 alembic upgrade head
 python -m cli.seed_data
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-#### 2. Frontend Setup
-```bash
+Now open **3 separate terminals** from the project root so all 3 processes run side by side:
+
+**Terminal 1 — FastAPI Web Server (`uvicorn`)** *(handles login, uploads, and API requests)*
+```powershell
+cd backend
+.\venv\Scripts\uvicorn.exe app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+**Terminal 2 — ARQ Background Worker** *(required — pulls queued uploads from Redis & calls Gemini)*
+```powershell
+cd backend
+.\venv\Scripts\python.exe -m app.workers.main
+```
+
+**Terminal 3 — Next.js Frontend Dashboard**
+```powershell
 cd frontend
 npm install
 npm run dev
 ```
 
+Once all 3 terminals are running, open **[http://localhost:3000](http://localhost:3000)**, register an account, and upload a contract PDF.
+
+---
+
+## ❓ Beginner FAQ & Troubleshooting
+
+- **Why is my uploaded document stuck in `queued`?**
+  - **Terminal 2 (`python -m app.workers.main`) is not running.** FastAPI (`uvicorn`) only receives the upload and puts a job into Redis; the separate ARQ worker processes it. Start Terminal 2 and your queued document will begin analyzing immediately.
+- **What does `waiting for quota` mean? Do I lose progress?**
+  - Your Gemini API key hit its daily request limit (`RPD`). Already-finished clauses are saved in PostgreSQL and clause embeddings in Redis (`embedcache:*`, 30-day TTL), so the job automatically resumes after reset (or when you click **Resume Analysis**) without redoing finished clauses.
+- **If I upload the exact same PDF again, does it skip Gemini completely?**
+  - **Embeddings** hit the Redis `embedcache:*` cache (`0` extra embedding calls if unchanged), while **LLM clause analysis** runs per uploaded document record cleanly.
+- **Are uploaded documents used for model training?**
+  - **Your app never trains on user documents** or adds them to the `reference_clauses` library. Note that Google's **free-tier** Gemini API key permits Google product improvement/training on prompts; switch to a **paid billing tier** in AI Studio / Vertex AI for sensitive legal data.
+- **Where are files and caches stored?**
+  - Uploaded files go into `backend/uploads/<user_id>/` (deleted automatically when you delete a document or your account). Embeddings/queues/rate limits live in Redis (`redis_data` in Docker), and all documents, clauses, and risk reports live in PostgreSQL.
+
 ---
 
 ## 🔍 Verification, Testing & Evaluation Commands
 
+All automated tests run **offline** (`APP_ENV=test`, zero Gemini API quota used):
+
 ```bash
-# 1. Run Phase Gate Evaluation (Phases 0 through 7)
-python scripts/eval.py --phase 0
-python scripts/eval.py --phase 3
-python scripts/eval.py --phase 4
-python scripts/eval.py --phase 5
+# 1. Run full local CI suite (Ruff lint/format + Mypy + empty-DB Alembic + 93 pytest tests + Phase 7 eval)
+python scripts/run_ci.py
 
-# 2. Run Backend Unit & Stress Tests
-pytest backend/tests/test_rate_limiter.py -v
-pytest backend/tests/test_embedding_resilience.py -v
-pytest backend/tests/test_rate_limit_stress.py -v
+# 2. Run full browser E2E suite (5 Playwright tests against real API + ARQ Worker + Next.js)
+python scripts/run_playwright.py
 
-# 3. Ingest Curated Reference Knowledge Base (with Overlap Audit)
-python scripts/ingest_kb.py --batch-limit 5
+# 3. Inspect today's Gemini outbound call ledger
+python backend/cli/ledger.py --today
 
-# 4. Run Dev-Split Model Evaluation
-python scripts/evaluate_models_dev.py --model gemini-3.5-flash-lite --batch-size 4 --report docs/eval/phase-4-flash-lite-report.md
+# 4. Run individual phase evaluation gates or tests
+python scripts/eval.py --phase 7
+pytest backend/tests -v
 
-# 5. Run Linters and Type Checkers
-ruff check backend scripts
-mypy --config-file backend/pyproject.toml backend/app
-
-# 6. Run Frontend Linter and Production Build
+# 5. Frontend lint & TypeScript check
 cd frontend
 npm run lint
-npm run build
+npx tsc --noEmit
 ```
 
 ---
 
 ## 📁 Repository Structure
 
-```
+```text
 Legal-Policy-Document-Simplifier/
 ├── backend/
+│   ├── alembic/           # PostgreSQL database migrations
 │   ├── app/
-│   │   ├── ai/            # Gemini client, embedding, rate-limiting & prompts
-│   │   ├── api/           # FastAPI routers (auth, docs, analysis, export)
-│   │   ├── core/          # Config, database, security & privacy logging
-│   │   ├── models/        # SQLAlchemy ORM models (Users, Documents, Clauses)
-│   │   ├── schemas/       # Strict Pydantic input/output schemas
-│   │   └── services/      # Ingestion, segmentation, retrieval & analysis
-│   ├── eval/              # Quantitative evaluation runner & harness
-│   └── tests/             # Pytest test suite (rate limits, resilience, stress)
+│   │   ├── ai/            # Gemini client, embedder, rate limiter, call ledger & RAG pipeline
+│   │   ├── api/           # FastAPI v1 endpoints (auth, documents, analysis, exports, ledger)
+│   │   ├── core/          # Config, DB session, cancellation, SSE broadcaster & logging
+│   │   ├── models/        # SQLAlchemy ORM models (Users, Documents, Clauses, Jobs)
+│   │   ├── services/      # Document upload, segmentation, analysis orchestration & cleanup
+│   │   └── workers/       # ARQ background worker entrypoint (python -m app.workers.main)
+│   ├── cli/               # CLI utilities (seed_data, ledger telemetry, knowledge base ingest)
+│   ├── eval/              # Phase gate evaluation runner & metrics harness
+│   └── tests/             # 93 Pytest tests (pipeline, rate limits, SIGKILL recovery, GDPR delete)
 ├── frontend/
-│   ├── src/
-│   │   ├── app/           # Next.js 16 App Router (dashboard, workspace, auth)
-│   │   └── components/    # Split-pane PDF viewer, risk cards & metrics
+│   ├── src/               # Next.js 16 App Router dashboard, split PDF viewer & SSE progress UI
+│   └── tests/             # Playwright browser E2E test suite (e2e.spec.ts)
 ├── scripts/
-│   ├── eval.py            # Phase gate CLI runner
-│   ├── evaluate_models_dev.py # Gemini 3.5 dev-split evaluator
-│   └── ingest_kb.py       # Knowledge base reference clause ingestion CLI
+│   ├── run_ci.py          # Full cross-platform CI check script
+│   ├── run_playwright.py  # Full-stack Playwright E2E orchestrator
+│   ├── eval.py            # Phase gate CLI wrapper
+│   └── ingest_kb.py       # Knowledge base ingestion CLI
 ├── tests/
-│   └── eval_data/         # Evaluation datasets (segmentation, risk, retrieval, injection)
-├── docker-compose.yml     # Multi-container orchestration
-└── README.md              # Self-contained project documentation & benchmarks
+│   └── eval_data/         # Evaluation benchmark PDFs & ground-truth JSON fixtures
+├── docker-compose.yml     # Full 5-container stack (postgres, redis, backend, worker, frontend)
+└── README.md              # Project overview, beginner quickstart & documentation
 ```
 
 ---
 
 ## 📄 License
 
-Distributed under the [MIT License](LICENSE).
+Distributed under the MIT License (see `backend/pyproject.toml`).

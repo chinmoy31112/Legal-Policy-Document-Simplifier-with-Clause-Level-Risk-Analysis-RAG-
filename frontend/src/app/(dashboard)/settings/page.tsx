@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/providers/auth-provider";
 import { apiClient } from "@/lib/api-client";
+import { closeAllDocumentStreams } from "@/lib/sse-registry";
 import {
   User,
   Shield,
@@ -17,6 +19,7 @@ import { Input } from "@/components/ui/input";
 
 export default function SettingsPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user, logout } = useAuth();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [confirmText, setConfirmText] = useState("");
@@ -34,6 +37,9 @@ export default function SettingsPage() {
 
     try {
       await apiClient.delete("/auth/me");
+      closeAllDocumentStreams();
+      await queryClient.cancelQueries();
+      queryClient.clear();
       logout();
       router.push("/login");
     } catch (err: unknown) {

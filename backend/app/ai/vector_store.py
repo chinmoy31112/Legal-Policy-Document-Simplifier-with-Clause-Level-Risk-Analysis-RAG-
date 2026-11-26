@@ -201,18 +201,18 @@ class PgVectorStore(VectorStore):
             try:
                 async with async_session_factory() as session:
                     # Query table reference_clauses with pgvector cosine distance operator <=>
-                    filter_clause = ""
+                    filter_clause = "WHERE embedding IS NOT NULL"
                     params: dict[str, Any] = {"q_vec": str(query_vector), "limit": top_k}
                     if filters and "category" in filters and filters["category"]:
-                        filter_clause = "WHERE category = :cat"
+                        filter_clause = "WHERE embedding IS NOT NULL AND category = :cat"
                         params["cat"] = filters["category"]
 
                     sql = f"""
                         SELECT id, title, category, document_type, text, why_standard_or_risky,
-                               1 - (embedding <=> :q_vec::vector) as similarity
+                               1 - (embedding <=> CAST(:q_vec AS vector)) as similarity
                         FROM reference_clauses
                         {filter_clause}
-                        ORDER BY embedding <=> :q_vec::vector
+                        ORDER BY embedding <=> CAST(:q_vec AS vector)
                         LIMIT :limit
                     """
                     res = await session.execute(text(sql), params)

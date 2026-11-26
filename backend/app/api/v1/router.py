@@ -13,6 +13,7 @@ from app.api.v1.endpoints import (
     export,
     health,
     knowledge_base,
+    ledger,
     search,
 )
 
@@ -65,4 +66,17 @@ api_v1_router.include_router(
     search.router,
     prefix="/search",
     tags=["Search"],
+)
+
+api_v1_router.include_router(
+    ledger.router,
+    prefix="/admin/ledger",
+    tags=["Call Ledger"],
+)
+
+api_v1_router.include_router(
+    ledger.router,
+    prefix="/ledger",
+    tags=["Call Ledger"],
+    include_in_schema=False,
 )

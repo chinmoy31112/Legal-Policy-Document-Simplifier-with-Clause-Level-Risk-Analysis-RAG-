@@ -35,6 +35,7 @@ async def ensure_tables_exist():
     global _tables_initialized
     if not _tables_initialized:
         try:
+
             async def _init():
                 async with engine.begin() as conn:
                     try:
@@ -57,9 +58,18 @@ def cleanup_database_and_redis():
         import redis
 
         from app.core.config import get_settings
+
         r = redis.from_url(get_settings().redis_url, socket_connect_timeout=0.1, socket_timeout=0.1)
         r.ping()
-        keys = r.keys("embedcache:*") + r.keys("ratelimit:*") + r.keys("user_quota:*")
+        keys = (
+            r.keys("embedcache:*")
+            + r.keys("ratelimit:*")
+            + r.keys("user_quota:*")
+            + r.keys("job:cancel:*")
+            + r.keys("job:ack:*")
+            + r.keys("aicache:*")
+            + r.keys("arq:*")
+        )
         if keys:
             r.delete(*keys)
     except Exception:
@@ -74,9 +84,18 @@ def cleanup_database_and_redis():
         import redis
 
         from app.core.config import get_settings
+
         r = redis.from_url(get_settings().redis_url, socket_connect_timeout=0.1, socket_timeout=0.1)
         r.ping()
-        keys = r.keys("embedcache:*") + r.keys("ratelimit:*") + r.keys("user_quota:*")
+        keys = (
+            r.keys("embedcache:*")
+            + r.keys("ratelimit:*")
+            + r.keys("user_quota:*")
+            + r.keys("job:cancel:*")
+            + r.keys("job:ack:*")
+            + r.keys("aicache:*")
+            + r.keys("arq:*")
+        )
         if keys:
             r.delete(*keys)
     except Exception:
@@ -87,5 +106,7 @@ def cleanup_database_and_redis():
 async def client() -> AsyncGenerator[AsyncClient, None]:
     """Create an async test client for the FastAPI app."""
     transport = ASGITransport(app=fastapi_app)
-    async with AsyncClient(transport=transport, base_url="http://test", follow_redirects=True) as ac:
+    async with AsyncClient(
+        transport=transport, base_url="http://test", follow_redirects=True
+    ) as ac:
         yield ac

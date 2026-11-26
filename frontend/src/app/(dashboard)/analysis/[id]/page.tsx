@@ -2,8 +2,19 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
-import { useDocument, useResumeDocument } from "@/hooks/use-documents";
-import { useDocumentSummary, useClauseAnalyses } from "@/hooks/use-analysis";
+import { useRouter } from "next/navigation";
+import {
+  useDocument,
+  useDeleteDocument,
+  useResumeDocument,
+  isActiveDocumentStatus,
+} from "@/hooks/use-documents";
+import {
+  useAnalysisStatus,
+  useAnalysisStream,
+  useDocumentSummary,
+  useClauseAnalyses,
+} from "@/hooks/use-analysis";
 import { StatusBadge } from "@/components/documents/status-badge";
 import {
   ArrowLeft,
@@ -12,6 +23,8 @@ import {
   Clock,
   FileText,
   RefreshCw,
+  Trash2,
+  Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnalysisSummary } from "@/components/analysis/analysis-summary";
@@ -26,18 +39,67 @@ export default function AnalysisPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   const [activeClauseId, setActiveClauseId] = useState<string | null>(null);
+  const [isStoppingDelete, setIsStoppingDelete] = useState(false);
 
-  const { data: document, isLoading: docLoading, isError: docError, refetch: refetchDoc, isFetching: docFetching } = useDocument(id);
+  const {
+    data: document,
+    isLoading: docLoading,
+    isError: docError,
+    refetch: refetchDoc,
+    isFetching: docFetching,
+  } = useDocument(id);
+
   const resumeMutation = useResumeDocument();
-  const isAnalyzing = document?.status === "analyzing";
+  const deleteMutation = useDeleteDocument();
+
+  const isProcessing = isActiveDocumentStatus(document?.status);
   const isCompleted = document?.status === "completed";
 
-  // Only fetch summary when document is completed to prevent 404 polling flicker while clauses are streaming
-  const { data: summary, isLoading: summaryLoading } = useDocumentSummary(id, isCompleted, false);
-  const { data: clauses, isLoading: clausesLoading, refetch: refetchClauses, isFetching: clausesFetching } = useClauseAnalyses(id, !!id, isAnalyzing);
+  const { data: statusData, refetch: refetchStatus } = useAnalysisStatus(
+    id,
+    !!id &&
+      (isProcessing ||
+        document?.status === "waiting for quota" ||
+        document?.status === "cancelling" ||
+        document?.status === "failed" ||
+        document?.status === "interrupted")
+  );
+  const { isProvisional } = useAnalysisStream(
+    id,
+    !!id && (isProcessing || document?.status === "cancelling") && !isStoppingDelete
+  );
 
-  // Initial loading state: clean centered loader while document metadata is retrieved
+  const currentStage =
+    statusData?.stage ||
+    (document?.status ? String(document.status).toLowerCase() : "");
+  const isCompletedOrScoring =
+    isCompleted || isProvisional || currentStage === "scoring" || currentStage === "summarizing";
+
+  const { data: summary, isLoading: summaryLoading } = useDocumentSummary(
+    id,
+    isCompletedOrScoring,
+    isProvisional || currentStage === "scoring" || currentStage === "summarizing"
+  );
+
+  const {
+    data: clauses,
+    isLoading: clausesLoading,
+    refetch: refetchClauses,
+    isFetching: clausesFetching,
+  } = useClauseAnalyses(id, !!id, isProcessing);
+
+  const handleDelete = async () => {
+    setIsStoppingDelete(true);
+    try {
+      await deleteMutation.mutateAsync(id);
+      router.push("/documents");
+    } catch {
+      setIsStoppingDelete(false);
+    }
+  };
+
   if (docLoading && !document) {
     return (
       <div className="p-12 text-center rounded-[18px] border border-[var(--border)] bg-[var(--card)] flex flex-col items-center justify-center min-h-[400px] animate-in fade-in duration-150 max-w-xl mx-auto my-12">
@@ -54,7 +116,6 @@ export default function AnalysisPage({
     );
   }
 
-  // Error / Not Found state
   if (docError || !document) {
     return (
       <div className="p-8 sm:p-12 text-center max-w-md mx-auto my-12 bg-[var(--card)] border border-[var(--risk-high-border)] rounded-[18px] shadow-sm">
@@ -77,11 +138,35 @@ export default function AnalysisPage({
     );
   }
 
-  const isProcessing = ["uploaded", "extracting", "segmenting", "analyzing"].includes(
-    document.status
-  );
+  const rawStatus = isStoppingDelete
+    ? "cancelling"
+    : String(statusData?.status || document.status || "").toLowerCase();
+  const jobStatus = isStoppingDelete
+    ? "cancelling"
+    : String(statusData?.job_status || "").toLowerCase();
 
-  const selectedClause = (clauses || []).find((c) => c.id === activeClauseId) || (clauses && clauses.length > 0 ? clauses[0] : null);
+  const isQueued =
+    !isStoppingDelete &&
+    (rawStatus === "queued" || rawStatus === "uploaded" || jobStatus === "queued");
+  const isWaitingForQuota =
+    rawStatus === "waiting for quota" ||
+    rawStatus === "waiting_for_quota" ||
+    jobStatus === "waiting_for_quota";
+  const isCancelling =
+    isStoppingDelete || rawStatus === "cancelling" || jobStatus === "cancelling";
+  const isCancelled = rawStatus === "cancelled" || jobStatus === "cancelled";
+  const isFailed =
+    rawStatus === "failed" ||
+    rawStatus === "interrupted" ||
+    jobStatus === "failed" ||
+    jobStatus === "interrupted";
+
+  const totalClauses = statusData?.total_clauses || clauses?.length || 0;
+  const analyzedClauses = statusData?.analyzed_clauses ?? clauses?.length ?? 0;
+
+  const selectedClause =
+    (clauses || []).find((c) => c.id === activeClauseId) ||
+    (clauses && clauses.length > 0 ? clauses[0] : null);
 
   const handleClauseSelect = (clauseId: string) => {
     setActiveClauseId(clauseId === activeClauseId ? null : clauseId);
@@ -104,8 +189,14 @@ export default function AnalysisPage({
               <FileText className="w-4 h-4 text-[var(--accent)] shrink-0" />
               <span className="truncate max-w-md sm:max-w-xl">{document.original_filename}</span>
             </h1>
-            <div className="flex items-center gap-2 mt-0.5 text-xs text-[var(--muted-foreground)]">
-              <span>{document.document_type === "non_legal" ? "Non-Legal Document" : document.document_type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</span>
+            <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs text-[var(--muted-foreground)]">
+              <span>
+                {document.document_type === "non_legal"
+                  ? "Non-Legal Document"
+                  : document.document_type
+                      .replace(/_/g, " ")
+                      .replace(/\b\w/g, (c) => c.toUpperCase())}
+              </span>
               {document.jurisdiction && (
                 <>
                   <span>•</span>
@@ -123,11 +214,52 @@ export default function AnalysisPage({
                 </>
               )}
               <span>•</span>
-              <StatusBadge status={document.status} />
+              <StatusBadge
+                status={isCancelling ? "cancelling" : rawStatus}
+                stage={statusData?.stage}
+                analyzedClauses={analyzedClauses}
+                totalClauses={totalClauses}
+              />
             </div>
           </div>
         </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-testid="delete-document-button"
+            disabled={isCancelling || deleteMutation.isPending}
+            onClick={handleDelete}
+            className="h-8 text-xs gap-1.5 border-[var(--risk-high-border)] text-[var(--risk-high-text)] hover:bg-[var(--risk-high-bg)]"
+          >
+            {isCancelling || deleteMutation.isPending ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Stopping analysis...</span>
+              </>
+            ) : (
+              <>
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
+              </>
+            )}
+          </Button>
+        </div>
       </div>
+
+      {/* Cancelling Banner */}
+      {isCancelling && (
+        <div
+          data-testid="stopping-analysis-banner"
+          className="p-4 rounded-[14px] border border-amber-500/30 bg-amber-500/10 flex items-center gap-3 text-xs text-amber-300"
+        >
+          <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+          <span className="font-semibold">Stopping analysis...</span>
+          <span>Waiting for worker confirmation before removing document records.</span>
+        </div>
+      )}
 
       {/* Non-Legal Document State */}
       {document.document_type === "non_legal" ? (
@@ -156,96 +288,49 @@ export default function AnalysisPage({
             </Link>
           </div>
         </div>
-      ) : isProcessing && (!clauses || clauses.length === 0) ? (
-        /* Early processing before first clauses stream in */
-        <div className="p-12 text-center rounded-[18px] border border-[var(--border)] bg-[var(--card)] flex flex-col items-center justify-center min-h-[350px]">
-          <div className="w-12 h-12 rounded-[14px] bg-[var(--soft-surface)] flex items-center justify-center mb-4 text-[var(--accent)]">
-            <Loader2 className="w-6 h-6 animate-spin" />
+      ) : isCancelled && (!clauses || clauses.length === 0) ? (
+        <div className="p-12 text-center rounded-[18px] border border-[var(--border)] bg-[var(--card)] flex flex-col items-center justify-center min-h-[320px]">
+          <div className="w-12 h-12 rounded-[14px] bg-[var(--soft-surface)] flex items-center justify-center mb-4 text-[var(--muted-foreground)]">
+            <Ban className="w-6 h-6" />
           </div>
           <h2 className="font-serif text-base font-semibold text-[var(--foreground)] mb-1">
-            Analyzing Contract Clauses...
+            Analysis Cancelled
           </h2>
-          <p className="text-xs text-[var(--muted-foreground)] max-w-sm leading-relaxed">
-            Extracting clauses, comparing against commercial benchmarks, and generating plain English simplifications. This view updates automatically.
+          <p className="text-xs text-[var(--muted-foreground)] max-w-md mb-6 leading-relaxed">
+            Processing was stopped before completion. You can start a fresh analysis or upload another contract.
           </p>
-          <div className="mt-5">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={docFetching}
-              onClick={() => refetchDoc()}
-              className="text-xs h-8 gap-1.5"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${docFetching ? "animate-spin" : ""}`} />
-              <span>{docFetching ? "Checking..." : "Check Status"}</span>
-            </Button>
-          </div>
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            disabled={resumeMutation.isPending}
+            onClick={() => resumeMutation.mutate(id)}
+            className="text-xs h-8 gap-1.5"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${resumeMutation.isPending ? "animate-spin" : ""}`} />
+            <span>{resumeMutation.isPending ? "Restarting..." : "Retry Analysis"}</span>
+          </Button>
         </div>
-      ) : document.status === "waiting for quota" ? (
-        <div className="p-12 text-center rounded-[18px] border border-[var(--risk-unusual-border)] bg-[var(--risk-unusual-bg)] flex flex-col items-center justify-center min-h-[350px]">
-          <div className="w-12 h-12 rounded-[14px] bg-[var(--card)] flex items-center justify-center mb-4 text-[var(--risk-unusual-text)]">
-            <Clock className="w-6 h-6 animate-pulse" />
-          </div>
-          <h2 className="font-serif text-base font-semibold text-[var(--risk-unusual-text)] mb-1">
-            Daily Quota Limit Reached
-          </h2>
-          <p className="text-xs text-[var(--risk-unusual-text)] max-w-md leading-relaxed mb-6">
-            The Google Gemini API daily quota for this tier is temporarily exhausted. All analyzed clauses and document state are safely saved in the database checkpoint.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center gap-3">
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              disabled={resumeMutation.isPending}
-              onClick={() => resumeMutation.mutate(id)}
-              className="text-xs h-8 gap-1.5 bg-[var(--accent)] text-[var(--accent-foreground)] hover:opacity-90"
-            >
-              {resumeMutation.isPending ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Resuming Analysis...</span>
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Resume Analysis Now</span>
-                </>
-              )}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={docFetching}
-              onClick={() => refetchDoc()}
-              className="text-xs h-8 gap-1.5"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${docFetching ? "animate-spin" : ""}`} />
-              <span>{docFetching ? "Checking..." : "Check Status"}</span>
-            </Button>
-          </div>
-          <p className="text-[11px] text-[var(--muted-foreground)] mt-4">
-            Daily quota resets at 00:00 UTC. Click &quot;Resume Analysis Now&quot; to process remaining clauses without re-analyzing completed ones.
-          </p>
-        </div>
-      ) : document.status === "failed" ? (
+      ) : isFailed ? (
         <div className="p-12 text-center rounded-[18px] border border-[var(--risk-high-border)] bg-[var(--card)] flex flex-col items-center justify-center min-h-[350px]">
           <div className="w-12 h-12 rounded-[14px] bg-[var(--risk-high-bg)] flex items-center justify-center mb-4 text-[var(--risk-high-text)]">
             <AlertCircle className="w-6 h-6" />
           </div>
           <h2 className="font-serif text-base font-semibold text-[var(--foreground)] mb-1">
-            Analysis Could Not Be Completed
+            {rawStatus === "interrupted"
+              ? "Analysis Interrupted"
+              : "Analysis Could Not Be Completed"}
           </h2>
           <p className="text-xs text-[var(--muted-foreground)] max-w-md mb-6 leading-relaxed">
-            The document could not be processed. This typically occurs with encrypted PDFs, scanned raster images without machine-readable text, or temporary API quota exhaustion.
+            {statusData?.message ||
+              "The document could not be finished cleanly. You can retry analysis to resume from the latest saved checkpoint."}
           </p>
           <div className="flex items-center gap-3">
             <Button
               type="button"
               variant="default"
               size="sm"
+              data-testid="retry-analysis-button"
               disabled={resumeMutation.isPending}
               onClick={() => resumeMutation.mutate(id)}
               className="text-xs h-8 gap-1.5 bg-[var(--accent)] text-[var(--accent-foreground)] hover:opacity-90"
@@ -272,16 +357,121 @@ export default function AnalysisPage({
         </div>
       ) : (
         <div className="space-y-6 flex-1 flex flex-col">
-          {/* Live In-Progress Streaming Banner */}
-          {isProcessing && (
-            <div className="p-3 px-4 rounded-[14px] border border-[var(--accent)]/30 bg-[var(--soft-surface)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          {/* Waiting for Quota Banner (always shown cleanly without fake countdown) */}
+          {isWaitingForQuota && (
+            <div
+              data-testid="quota-pause-banner"
+              className="p-5 rounded-[16px] border border-[var(--risk-unusual-border)] bg-[var(--risk-unusual-bg)] flex flex-col md:flex-row md:items-center justify-between gap-4"
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-[12px] bg-[var(--card)] flex items-center justify-center text-[var(--risk-unusual-text)] shrink-0">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <h2 className="font-serif text-sm font-semibold text-[var(--risk-unusual-text)]">
+                    Paused: Daily Quota Limit Reached
+                  </h2>
+                  <p className="text-xs text-[var(--risk-unusual-text)] leading-relaxed max-w-2xl">
+                    Analysis resumes automatically after the daily quota reset. Completed clauses ({analyzedClauses} of {totalClauses || analyzedClauses} clauses) remain safely saved.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  data-testid="resume-analysis-button"
+                  disabled={resumeMutation.isPending}
+                  onClick={() => resumeMutation.mutate(id)}
+                  className="text-xs h-8 gap-1.5 bg-[var(--accent)] text-[var(--accent-foreground)] hover:opacity-90"
+                >
+                  <RefreshCw
+                    className={`w-3.5 h-3.5 ${resumeMutation.isPending ? "animate-spin" : ""}`}
+                  />
+                  <span>
+                    {resumeMutation.isPending ? "Resuming..." : "Resume Analysis Now"}
+                  </span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={docFetching}
+                  onClick={() => {
+                    void refetchDoc();
+                    void refetchStatus();
+                  }}
+                  className="text-xs h-8 gap-1.5"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${docFetching ? "animate-spin" : ""}`} />
+                  <span>Check Status</span>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Early Queued / Pre-Clause Processing Card */}
+          {isProcessing && !isWaitingForQuota && !isCancelling && (!clauses || clauses.length === 0) ? (
+            <div
+              data-testid="job-progress-card"
+              className="p-12 text-center rounded-[18px] border border-[var(--border)] bg-[var(--card)] flex flex-col items-center justify-center min-h-[300px]"
+            >
+              <div className="w-12 h-12 rounded-[14px] bg-[var(--soft-surface)] flex items-center justify-center mb-4 text-[var(--accent)]">
+                {isQueued ? (
+                  <Clock className="w-6 h-6" />
+                ) : (
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                )}
+              </div>
+              <h2 className="font-serif text-base font-semibold text-[var(--foreground)] mb-1">
+                {isQueued
+                  ? "Queued for Analysis"
+                  : `Running: ${(statusData?.stage || rawStatus || "processing").replace(/_/g, " ")}`}
+              </h2>
+              <p className="text-xs text-[var(--muted-foreground)] max-w-sm leading-relaxed">
+                {totalClauses > 0
+                  ? `${analyzedClauses} of ${pluralize(totalClauses, "clause")} analyzed.`
+                  : statusData?.current_step ||
+                    "Extracting clauses, comparing against commercial benchmarks, and generating plain English simplifications."}
+              </p>
+              <div className="mt-5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={docFetching || clausesFetching}
+                  onClick={() => {
+                    void refetchDoc();
+                    void refetchStatus();
+                    void refetchClauses();
+                  }}
+                  className="text-xs h-8 gap-1.5"
+                >
+                  <RefreshCw
+                    className={`w-3.5 h-3.5 ${docFetching || clausesFetching ? "animate-spin" : ""}`}
+                  />
+                  <span>{docFetching || clausesFetching ? "Checking..." : "Check Status"}</span>
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Live In-Progress Streaming Banner once first clauses arrive */}
+          {isProcessing && !isWaitingForQuota && !isCancelling && clauses && clauses.length > 0 && (
+            <div
+              data-testid="streaming-progress-banner"
+              className="p-3 px-4 rounded-[14px] border border-[var(--accent)]/30 bg-[var(--soft-surface)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+            >
               <div className="flex items-center gap-2.5 text-[var(--foreground)]">
                 <Loader2 className="w-4 h-4 animate-spin text-[var(--accent)] shrink-0" />
-                <span className="font-semibold">Analysis in progress:</span>
-                <span className="text-[var(--muted-foreground)]">
-                  {clauses && clauses.length > 0
-                    ? `Live streaming active — ${pluralize(clauses.length, "clause")} analyzed so far.`
-                    : "Processing document..."}
+                <span className="font-semibold">
+                  Stage: {(statusData?.stage || rawStatus || "analyzing").replace(/_/g, " ")}
+                </span>
+                <span className="text-[var(--muted-foreground)]" data-testid="clause-progress-counter">
+                  {totalClauses > 0
+                    ? `${analyzedClauses || clauses.length} of ${totalClauses} clauses analyzed`
+                    : `${pluralize(clauses.length, "clause")} analyzed so far`}
                 </span>
               </div>
               <div className="flex items-center gap-2.5 self-end sm:self-auto shrink-0">
@@ -290,26 +480,31 @@ export default function AnalysisPage({
                   variant="outline"
                   size="sm"
                   onClick={async () => {
-                    await Promise.all([refetchDoc(), refetchClauses()]);
+                    await Promise.all([refetchDoc(), refetchStatus(), refetchClauses()]);
                   }}
                   disabled={docFetching || clausesFetching}
                   className="h-7 text-xs px-2.5 gap-1.5 bg-[var(--card)] hover:bg-[var(--soft-surface)] border-[var(--border)] transition-all"
-                  title="Check analysis progress and refresh newly analyzed clauses"
                 >
-                  <RefreshCw className={`w-3 h-3 ${docFetching || clausesFetching ? "animate-spin" : ""}`} />
+                  <RefreshCw
+                    className={`w-3 h-3 ${docFetching || clausesFetching ? "animate-spin" : ""}`}
+                  />
                   <span>{docFetching || clausesFetching ? "Checking..." : "Check Status"}</span>
                 </Button>
-                <span className="text-[11px] font-mono text-[var(--muted-foreground)] hidden md:inline">Auto-updating (3s)</span>
+                <span className="text-[11px] font-mono text-[var(--muted-foreground)] hidden md:inline">
+                  Live SSE
+                </span>
               </div>
             </div>
           )}
 
-          {/* Top Overall Risk Summary & Risk Count Chips */}
+          {/* Top Overall Risk Summary & Risk Count Chips (supports provisional score before summary completes) */}
           {summary ? (
             <AnalysisSummary
               analysis={summary}
               documentId={id}
-              clauseCount={clauses?.length}
+              clauses={clauses}
+              clauseCount={clauses?.length || totalClauses}
+              isProvisional={!isCompleted || isProvisional}
             />
           ) : isCompleted && summaryLoading ? (
             <div className="p-6 rounded-[18px] border border-[var(--border)] bg-[var(--card)] flex items-center justify-between gap-6 min-h-[120px] animate-pulse">
@@ -335,49 +530,63 @@ export default function AnalysisPage({
           ) : null}
 
           {/* Two-Column Workspace: Viewer (Left) + Detail Panel (Right) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-start min-h-[600px]">
-            {/* Left Column: PDF Viewer with Clause List and Search */}
-            <div className="lg:col-span-7 xl:col-span-7 h-[650px] lg:h-[750px]">
-              {clausesLoading && !clauses ? (
-                <Skeleton className="w-full h-full" rounded="card" />
-              ) : (
+          {((clauses && clauses.length > 0) || !isProcessing) && !isWaitingForQuota && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-start min-h-[600px]">
+              <div className="lg:col-span-7 xl:col-span-7 h-[650px] lg:h-[750px]">
+                {clausesLoading && !clauses ? (
+                  <Skeleton className="w-full h-full" rounded="card" />
+                ) : (
+                  <DocumentViewer
+                    document={document}
+                    clauses={clauses || []}
+                    activeClauseId={activeClauseId}
+                    onClauseSelect={handleClauseSelect}
+                    className="h-full"
+                  />
+                )}
+              </div>
+
+              <div className="hidden lg:block lg:col-span-5 xl:col-span-5 h-[650px] lg:h-[750px] sticky top-20">
+                <ClauseDetailPanel clause={selectedClause} className="h-full" />
+              </div>
+
+              {activeClauseId && (
+                <div
+                  className="lg:hidden fixed inset-x-0 bottom-0 z-50 p-4 bg-black/50 backdrop-blur-xs flex justify-center"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Clause Details Sheet"
+                >
+                  <div className="w-full max-w-lg max-h-[80vh] bg-[var(--card)] rounded-t-[18px] border border-[var(--border)] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-200">
+                    <div className="w-12 h-1.5 bg-[var(--border)] rounded-full mx-auto my-2 shrink-0" />
+                    <ClauseDetailPanel
+                      clause={selectedClause}
+                      onClose={() => setActiveClauseId(null)}
+                      className="border-none rounded-none shadow-none flex-1"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Show streamed partial clauses cleanly underneath quota-pause banner */}
+          {isWaitingForQuota && clauses && clauses.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-start min-h-[500px]">
+              <div className="lg:col-span-7 xl:col-span-7 h-[550px]">
                 <DocumentViewer
                   document={document}
-                  clauses={clauses || []}
+                  clauses={clauses}
                   activeClauseId={activeClauseId}
                   onClauseSelect={handleClauseSelect}
                   className="h-full"
                 />
-              )}
-            </div>
-
-            {/* Right Column: Clause Detail Panel (Desktop) */}
-            <div className="hidden lg:block lg:col-span-5 xl:col-span-5 h-[650px] lg:h-[750px] sticky top-20">
-              <ClauseDetailPanel
-                clause={selectedClause}
-                className="h-full"
-              />
-            </div>
-
-            {/* Mobile Bottom Sheet (Narrow Screens) */}
-            {activeClauseId && (
-              <div
-                className="lg:hidden fixed inset-x-0 bottom-0 z-50 p-4 bg-black/50 backdrop-blur-xs flex justify-center"
-                role="dialog"
-                aria-modal="true"
-                aria-label="Clause Details Sheet"
-              >
-                <div className="w-full max-w-lg max-h-[80vh] bg-[var(--card)] rounded-t-[18px] border border-[var(--border)] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-200">
-                  <div className="w-12 h-1.5 bg-[var(--border)] rounded-full mx-auto my-2 shrink-0" />
-                  <ClauseDetailPanel
-                    clause={selectedClause}
-                    onClose={() => setActiveClauseId(null)}
-                    className="border-none rounded-none shadow-none flex-1"
-                  />
-                </div>
               </div>
-            )}
-          </div>
+              <div className="hidden lg:block lg:col-span-5 xl:col-span-5 h-[550px]">
+                <ClauseDetailPanel clause={selectedClause} className="h-full" />
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

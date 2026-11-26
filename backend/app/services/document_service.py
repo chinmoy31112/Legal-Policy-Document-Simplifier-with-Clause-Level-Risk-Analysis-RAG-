@@ -8,6 +8,7 @@ import os
 import re
 import uuid
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from fastapi import UploadFile
@@ -129,13 +130,17 @@ class DocumentService:
                 doc = fitz.open(stream=content, filetype="pdf")
                 if doc.needs_pass or doc.is_encrypted:
                     doc.close()
-                    raise ValidationError("Password-protected or encrypted PDF files are not supported.")
+                    raise ValidationError(
+                        "Password-protected or encrypted PDF files are not supported."
+                    )
                 if doc.page_count == 0:
                     doc.close()
                     raise ValidationError("Uploaded PDF contains zero pages.")
                 if is_scanned_pdf(doc):
                     doc.close()
-                    raise ValidationError("Scanned PDFs are not supported in v1. Please upload a machine-readable, text-based PDF or document.")
+                    raise ValidationError(
+                        "Scanned PDFs are not supported in v1. Please upload a machine-readable, text-based PDF or document."
+                    )
                 doc.close()
             except ValidationError:
                 raise
@@ -217,36 +222,104 @@ class DocumentService:
             raise NotFoundError("Document", str(document_id))
         return document
 
-    async def delete_document(self, document_id: UUID, user_id: UUID) -> None:
+    async def delete_document(
+        self,
+        document_id: UUID,
+        user_id: UUID,
+        legacy_tasks_map: dict[UUID, Any] | None = None,
+    ) -> dict[str, Any]:
         """
-        Delete a document and its file from disk.
+        Cancel any running/queued jobs for a document (DB + Redis + ARQ, waiting up to 5s),
+        delete files and DB records (results, clauses, jobs, document), purge tied AI caches,
+        and return a report of what was purged and what is kept.
 
         Raises:
             NotFoundError: If the document doesn't exist or doesn't belong to the user.
         """
+        from sqlalchemy import delete, select
+
+        from app.core.cancellation import purge_ai_caches
+        from app.models.analysis import AnalysisResult, DocumentAnalysis
+        from app.models.clause import Clause
+        from app.models.job import Job
+        from app.services.job_service import JobService
+
         document = await self.document_repo.get_by_id_and_user(document_id, user_id)
         if document is None:
             raise NotFoundError("Document", str(document_id))
 
-        # Delete file from disk
+        # Capture clause texts for AI cache invalidation before deleting rows
+        clause_res = await self.session.execute(
+            select(Clause.content).where(Clause.document_id == document_id)
+        )
+        clause_texts = [row[0] for row in clause_res.fetchall() if row[0]]
+
+        # 1. Cancel running/queued jobs and wait up to 5s for confirmation
+        job_service = JobService(self.session)
+        cancel_summary = await job_service.cancel_document_jobs(
+            document_id=document_id,
+            timeout_seconds=5.0,
+            legacy_tasks_map=legacy_tasks_map,
+        )
+
+        # 2. Delete file from disk
+        file_deleted = False
         file_path = Path(document.file_path)
         if not file_path.exists():
-            settings = get_settings()
-            alt = settings.upload_path / str(user_id) / document.filename
+            cfg = get_settings()
+            alt = cfg.upload_path / str(user_id) / document.filename
             if alt.exists():
                 file_path = alt
         if file_path.exists():
             try:
                 file_path.unlink()
+                file_deleted = True
             except OSError as e:
                 logger.warning("file_delete_error", error=str(e), path=str(file_path))
 
-        # Delete from database
+        # 3. Explicitly purge results, clauses, jobs, and document from database
+        res_del = await self.session.execute(
+            delete(AnalysisResult).where(AnalysisResult.document_id == document_id)
+        )
+        da_del = await self.session.execute(
+            delete(DocumentAnalysis).where(DocumentAnalysis.document_id == document_id)
+        )
+        cls_del = await self.session.execute(
+            delete(Clause).where(Clause.document_id == document_id)
+        )
+        job_del = await self.session.execute(delete(Job).where(Job.document_id == document_id))
         await self.document_repo.delete(document_id)
         await self.session.commit()
+
+        # 4. Purge cached AI results tied to this document
+        cache_purged = await purge_ai_caches(
+            document_ids=[str(document_id)],
+            clause_texts=clause_texts,
+        )
+
+        report: dict[str, Any] = {
+            "purged": {
+                "document_id": str(document_id),
+                "analysis_results": int(res_del.rowcount or 0),
+                "document_analyses": int(da_del.rowcount or 0),
+                "clauses": int(cls_del.rowcount or 0),
+                "jobs": int(job_del.rowcount or 0),
+                "files": 1 if file_deleted else 0,
+                **cache_purged,
+                "cancellation": cancel_summary,
+            },
+            "kept": {
+                "audit_logs": "Retained for audit compliance (no document text).",
+                "call_ledger": "API quota telemetry entries retained without document content.",
+                "reference_clauses": "Global precedent corpus unchanged.",
+            },
+        }
 
         logger.info(
             "document_deleted",
             document_id=str(document_id),
             user_id=str(user_id),
+            purged=report["purged"],
+            kept=report["kept"],
         )
+        return report

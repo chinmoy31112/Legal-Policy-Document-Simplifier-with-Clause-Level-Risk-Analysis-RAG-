@@ -52,7 +52,9 @@ class MetricsRegistry:
             return ()
         return tuple(sorted((k, str(v)) for k, v in labels.items()))
 
-    def increment(self, name: str, value: float = 1.0, labels: dict[str, str] | None = None) -> None:
+    def increment(
+        self, name: str, value: float = 1.0, labels: dict[str, str] | None = None
+    ) -> None:
         """Increment a counter metric."""
         key = (name, self._labels_to_key(labels))
         with self._lock:
@@ -162,7 +164,11 @@ def track_request(method: str, path: str, status_code: int, duration_sec: float)
         "status": str(status_code),
     }
     registry.increment("http_requests_total", labels=labels)
-    registry.observe("http_request_duration_seconds", duration_sec, labels={"method": method, "endpoint": norm_path})
+    registry.observe(
+        "http_request_duration_seconds",
+        duration_sec,
+        labels={"method": method, "endpoint": norm_path},
+    )
 
 
 def track_llm_call(model_name: str, duration_sec: float) -> None:

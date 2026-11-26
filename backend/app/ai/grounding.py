@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 @dataclass
 class GroundingValidationResult:
     """Outcome of validating grounding citations for risk reasons."""
+
     is_valid: bool
     grounding_precision: float
     total_reasons: int
@@ -108,7 +109,9 @@ class GroundingValidator:
                     return True, f"verbatim_quad:{quad}"
 
         # 4. Check for key legal monetary / duration terms explicitly quoted
-        specific_terms = re.findall(r"\b(\$\d+|\d+\s*months?|\d+\s*days?|100%|as is|sole remedy)\b", norm_clause)
+        specific_terms = re.findall(
+            r"\b(\$\d+|\d+\s*months?|\d+\s*days?|100%|as is|sole remedy)\b", norm_clause
+        )
         for term in specific_terms:
             if term in norm_reason:
                 return True, f"specific_term:{term}"
@@ -165,4 +168,3 @@ class GroundingValidator:
             rejection_details=details,
             error_message=error_msg,
         )
-

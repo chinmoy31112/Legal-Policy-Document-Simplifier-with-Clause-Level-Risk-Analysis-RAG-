@@ -1,0 +1,45 @@
+# Reproducible CI Docker Compose stack with an empty pgvector/pgvector:pg16 database
+# Run: docker compose -f docker-compose.ci.yml up --build --abort-on-container-exit --exit-code-from ci
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: legal_simplifier
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d legal_simplifier"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ci:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    environment:
+      CI_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/legal_simplifier
+      CI_SKIP_DB_RESET: "1"
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/legal_simplifier
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: test
+      GOOGLE_API_KEY: ""
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "pip install --no-cache-dir ruff mypy arq redis && python scripts/run_ci.py"

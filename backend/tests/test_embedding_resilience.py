@@ -88,7 +88,9 @@ async def test_cache_is_not_cleared_on_error():
 
     # Simulate an API error on a new text
     mock_client = MagicMock()
-    mock_client.aio.models.embed_content = AsyncMock(side_effect=RuntimeError("Transient network failure"))
+    mock_client.aio.models.embed_content = AsyncMock(
+        side_effect=RuntimeError("Transient network failure")
+    )
     embedder._client = mock_client
 
     # Request both the cached text and a new failing text
@@ -114,7 +116,9 @@ async def test_exponential_backoff_on_429():
     # First call throws 429 RESOURCE_EXHAUSTED, second call succeeds
     mock_client.aio.models.embed_content = AsyncMock(
         side_effect=[
-            Exception("429 RESOURCE_EXHAUSTED: Quota exceeded for quota metric 'Embed Content API requests'"),
+            Exception(
+                "429 RESOURCE_EXHAUSTED: Quota exceeded for quota metric 'Embed Content API requests'"
+            ),
             mock_success,
         ]
     )
@@ -195,7 +199,9 @@ async def test_simulated_429_mid_batch_recovery_zero_duplicates_zero_lost():
         # Inject 429 on the second batch call
         if call_count == 2:
             injected_429_count += 1
-            raise Exception("429 RESOURCE_EXHAUSTED: Rate limit exceeded mid-batch. Retry in 0.05s.")
+            raise Exception(
+                "429 RESOURCE_EXHAUSTED: Rate limit exceeded mid-batch. Retry in 0.05s."
+            )
 
         resp = MagicMock()
         resp.embeddings = [MagicMock(values=[0.5 + 0.01 * i] * 768) for i in range(len(contents))]
@@ -208,8 +214,9 @@ async def test_simulated_429_mid_batch_recovery_zero_duplicates_zero_lost():
     # 10 distinct clauses split into clauses of [4, 4, 2]
     clauses = [f"Resilience clause number {i}: Party A shall indemnify Party B." for i in range(10)]
 
-    with patch("tenacity.wait_exponential.__call__", return_value=0.01), patch(
-        "app.ai.llm.calculate_jittered_backoff", return_value=0.01
+    with (
+        patch("tenacity.wait_exponential.__call__", return_value=0.01),
+        patch("app.ai.llm.calculate_jittered_backoff", return_value=0.01),
     ):
         results = await embedder.embed_texts(clauses)
 
@@ -223,5 +230,7 @@ async def test_simulated_429_mid_batch_recovery_zero_duplicates_zero_lost():
     initial_api_calls = call_count
     cached_results = await embedder.embed_texts(clauses)
     assert len(cached_results) == 10
-    assert call_count == initial_api_calls, "Zero duplicate API calls: cached vectors must be reused"
+    assert call_count == initial_api_calls, (
+        "Zero duplicate API calls: cached vectors must be reused"
+    )
     assert cached_results == results

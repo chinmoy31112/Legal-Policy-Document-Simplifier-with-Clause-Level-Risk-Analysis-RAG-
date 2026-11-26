@@ -175,7 +175,9 @@ async def test_shared_quota_exhausted_flag():
     with pytest.raises(DailyQuotaExceededError) as exc_info:
         await limiter.acquire(estimated_tokens=10)
 
-    assert "Daily limit reached in batch 1" in str(exc_info.value) or "Daily API quota reached" in str(exc_info.value)
+    assert "Daily limit reached in batch 1" in str(
+        exc_info.value
+    ) or "Daily API quota reached" in str(exc_info.value)
 
     # Reset clears the flag cleanly
     limiter.reset_daily_quota_exhausted()
@@ -207,7 +209,9 @@ async def test_pipeline_aborts_sibling_batches_on_daily_quota():
                 model_name=offline_llm.model_name,
                 notice="Daily API quota reached.",
             )
-        return offline_llm._generate_offline_reasoning(kwargs.get("prompt", ""), kwargs.get("response_model"))
+        return offline_llm._generate_offline_reasoning(
+            kwargs.get("prompt", ""), kwargs.get("response_model")
+        )
 
     with patch.object(offline_llm, "generate_structured", side_effect=mock_generate_structured):
         with pytest.raises(DailyQuotaExceededError):
@@ -309,7 +313,13 @@ async def test_resume_at_clause_13_without_resent():
             return await original_analyze_batch(*args, **kwargs)
 
         fake_segments = [
-            ProcessedClause(id=f"seg_{i}", order=i, title=f"Clause {i}", text=f"This is the contractual text of clause {i}.", page=1)
+            ProcessedClause(
+                id=f"seg_{i}",
+                order=i,
+                title=f"Clause {i}",
+                text=f"This is the contractual text of clause {i}.",
+                page=1,
+            )
             for i in range(1, 16)
         ]
         fake_extraction = ExtractionResult(
@@ -319,8 +329,13 @@ async def test_resume_at_clause_13_without_resent():
 
         with (
             patch("app.services.analysis_service.extract_document", return_value=fake_extraction),
-            patch("app.document_processing.segmenter.DocumentSegmenter.segment", return_value=fake_segments),
-            patch.object(service.pipeline, "analyze_clauses_batch", side_effect=tracking_analyze_batch),
+            patch(
+                "app.document_processing.segmenter.DocumentSegmenter.segment",
+                return_value=fake_segments,
+            ),
+            patch.object(
+                service.pipeline, "analyze_clauses_batch", side_effect=tracking_analyze_batch
+            ),
         ):
             await service._run_analysis_task(doc.id)
 
@@ -331,7 +346,9 @@ async def test_resume_at_clause_13_without_resent():
 
         # Assert no finished clause was re-sent
         re_sent_clauses = analyzed_1_to_12_ids.intersection(set(sent_to_pipeline_clause_ids))
-        assert len(re_sent_clauses) == 0, f"Finished clauses were re-sent to pipeline: {re_sent_clauses}"
+        assert len(re_sent_clauses) == 0, (
+            f"Finished clauses were re-sent to pipeline: {re_sent_clauses}"
+        )
 
         # Assert only clauses 13, 14, 15 were sent
         assert set(sent_to_pipeline_clause_ids) == analyzed_13_to_15_ids
@@ -344,3 +361,249 @@ async def test_resume_at_clause_13_without_resent():
         # Verify all 15 clauses have analysis records in DB
         all_analyses = await service.analysis_repo.get_by_document(doc.id)
         assert len(all_analyses) == 15
+
+
+@pytest.mark.asyncio
+async def test_waiting_quota_jobs_auto_restart_after_flag_expires():
+    """
+    Part F.1: Verify the daily quota flag is stored with UTC-reset expiry and
+    JobService.resume_waiting_for_quota_jobs() restarts waiting_for_quota jobs
+    once the quota-exhausted flag expires/clears.
+    """
+    from app.ai.rate_limiter import get_model_rate_limiter
+    from app.core.config import get_settings
+    from app.models.job import Job
+    from app.services.job_service import JobService
+
+    settings = get_settings()
+    clause_limiter = get_model_rate_limiter(settings.gemini_clause_model)
+    summary_limiter = get_model_rate_limiter(settings.gemini_summary_model)
+    embed_limiter = get_model_rate_limiter(settings.gemini_embedding_model)
+
+    async with async_session_factory() as session:
+        user = User(
+            email=f"auto_resume_{uuid.uuid4().hex[:8]}@example.com",
+            hashed_password="pwd",
+            full_name="Auto Resume",
+        )
+        session.add(user)
+        await session.flush()
+
+        doc = Document(
+            user_id=user.id,
+            filename="waiting_doc.pdf",
+            original_filename="waiting_doc.pdf",
+            file_path="uploads/waiting_doc.pdf",
+            file_size=512,
+            file_type="pdf",
+            status="waiting for quota",
+            document_type="terms_and_conditions",
+        )
+        session.add(doc)
+        await session.flush()
+
+        job = Job(
+            id=uuid.uuid4(),
+            document_id=doc.id,
+            user_id=user.id,
+            status="waiting_for_quota",
+            stage="waiting_for_quota",
+            total_clauses=10,
+            completed_clauses=4,
+            cancel_requested=False,
+        )
+        session.add(job)
+        await session.commit()
+
+        job_service = JobService(session)
+        try:
+            # While daily quota flag is active, cron/service MUST NOT restart waiting jobs
+            clause_limiter.mark_daily_quota_exhausted(notice="Daily cap hit")
+            resumed_while_exhausted = await job_service.resume_waiting_for_quota_jobs()
+            assert resumed_while_exhausted == 0
+
+            # Once reset happens (flag expires / clears), waiting job is re-queued cleanly
+            clause_limiter.reset_daily_quota_exhausted()
+            summary_limiter.reset_daily_quota_exhausted()
+            embed_limiter.reset_daily_quota_exhausted()
+
+            resumed_count = await job_service.resume_waiting_for_quota_jobs()
+            assert resumed_count >= 1
+
+            await session.refresh(job)
+            await session.refresh(doc)
+            assert job.status == "queued"
+            assert job.stage == "queued"
+            assert doc.status == "uploaded"
+        finally:
+            clause_limiter.reset_daily_quota_exhausted()
+            summary_limiter.reset_daily_quota_exhausted()
+            embed_limiter.reset_daily_quota_exhausted()
+
+
+@pytest.mark.asyncio
+async def test_per_minute_429_with_latency_fake_retries_and_completes():
+    """
+    Part F.2: Per-minute 429 (with quotaId or transient RESOURCE_EXHAUSTED) must
+    just retry and succeed without setting daily quota exhaustion.
+    """
+    from app.ai.latency_fake import LatencySimulatingFakeLLM
+    from app.ai.response_parser import LLMClauseAnalysis
+
+    rpm_only_err = (
+        "429 RESOURCE_EXHAUSTED. Quota exceeded for metric: "
+        "generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 15, "
+        "quotaId: GenerateRequestsPerMinutePerProjectPerModel-FreeTier. Please retry in 0.05s."
+    )
+    assert is_daily_quota_error(rpm_only_err) is False
+
+    limiter = SharedModelRateLimiter(
+        model_name=f"rpm-retry-{uuid.uuid4().hex[:8]}",
+        max_rpm=12,
+        min_interval=0.0,
+    )
+    fake_llm = LatencySimulatingFakeLLM(
+        model_name=limiter.model_name,
+        sleep_range=(0.05, 0.08),
+        rate_limiter=limiter,
+        inject_429_minute=2,
+    )
+
+    pipeline = RiskAnalysisPipeline(llm_client=fake_llm)
+    dummy_vec = [0.0] * 768
+    pipeline.embedder.embed_query = AsyncMock(return_value=dummy_vec)
+
+    # Simulate client retry wrapper around transient per-minute 429s
+    attempts = 0
+    analysis = None
+    for _ in range(4):
+        attempts += 1
+        try:
+            analysis = await fake_llm.generate_structured(
+                prompt="<<<UNTRUSTED_DOCUMENT_CLAUSE>>>\nVendor liability is capped at $100.\n<<<END_UNTRUSTED_DOCUMENT_CLAUSE>>>",
+                response_model=LLMClauseAnalysis,
+            )
+            break
+        except Exception:
+            assert limiter.is_daily_quota_exhausted is False
+
+    assert attempts == 3
+    assert analysis is not None
+    assert limiter.is_daily_quota_exhausted is False
+
+
+@pytest.mark.asyncio
+async def test_non_legal_document_classification_returns_no_score():
+    """
+    Part F.3: Check document type before analysis; if non-legal (setup guide / README),
+    say so cleanly and persist DocumentAnalysis with overall_risk_score=None and 0 clauses.
+    """
+    async with async_session_factory() as session:
+        user = User(
+            email=f"nonlegal_{uuid.uuid4().hex[:8]}@example.com",
+            hashed_password="pwd",
+            full_name="Non Legal User",
+        )
+        session.add(user)
+        await session.flush()
+
+        doc = Document(
+            user_id=user.id,
+            filename="setup_guide.pdf",
+            original_filename="setup_guide.pdf",
+            file_path="uploads/setup_guide.pdf",
+            file_size=512,
+            file_type="pdf",
+            status="uploaded",
+            document_type="other",
+        )
+        session.add(doc)
+        await session.commit()
+
+        service = AnalysisService(session)
+        offline_llm = GeminiLLMClient(force_offline=True)
+        offline_llm._rate_limiter.reset_daily_quota_exhausted()
+        service.pipeline.clause_llm = offline_llm
+        service.pipeline.summary_llm = offline_llm
+
+        non_legal_extraction = ExtractionResult(
+            raw_text=(
+                "QUICKSTART & SETUP GUIDE\n"
+                "Prerequisites: Python 3.12 and Node 20.\n"
+                "Run pip install -r requirements.txt and npm install to start the dev server."
+            ),
+            is_scanned=False,
+        )
+
+        with patch(
+            "app.services.analysis_service.extract_document", return_value=non_legal_extraction
+        ):
+            await service._run_analysis_task(doc.id)
+
+        refreshed = await service.document_repo.get_by_id(doc.id)
+        assert refreshed is not None
+        assert refreshed.status == "completed"
+        assert refreshed.document_type == "non_legal"
+
+        doc_analysis = await service.doc_analysis_repo.get_by_document(doc.id)
+        assert doc_analysis is not None
+        assert doc_analysis.overall_risk_score is None
+        assert "doesn't look like a legal" in (doc_analysis.overall_summary or "").lower()
+
+        clauses = await service.analysis_repo.get_by_document(doc.id)
+        assert len(clauses) == 0
+
+
+@pytest.mark.asyncio
+async def test_summary_reference_wording_enforced():
+    """
+    Part F.4: Summary may say "aligns with typical standards" only if references were
+    retrieved; otherwise it MUST NOT claim alignment and must say "no close reference found".
+    """
+    from app.ai.response_parser import DocumentRiskAnalysis
+
+    # 1. No retrieved references -> pipeline strips any hallucinated "aligns with typical standards"
+    # and guarantees "no close reference found"
+    fake_llm = GeminiLLMClient(force_offline=True)
+    pipeline = RiskAnalysisPipeline(llm_client=fake_llm)
+
+    hallucinated_response = DocumentRiskAnalysis(
+        overall_risk_score=15,
+        overall_risk_level="LOW",
+        executive_summary="This contract aligns with typical standards in the industry.",
+        key_risks=[],
+        category_breakdown={},
+        negotiation_priorities=[],
+    )
+    no_ref_clauses = [
+        {
+            "clause_id": "c1",
+            "risk_score": 15,
+            "risk_level": "LOW",
+            "plain_english": "Standard payment schedule.",
+            "risk_reasons": [],
+            "retrieved_references": [],
+        }
+    ]
+
+    with patch.object(fake_llm, "generate_structured", return_value=hallucinated_response):
+        res_no_ref = await pipeline.aggregate_document(no_ref_clauses)
+
+    summary_lower = res_no_ref.executive_summary.lower()
+    assert "aligns with typical standards" not in summary_lower
+    assert "no close reference found" in summary_lower
+
+    # 2. Real retrieved references + standard clauses -> allowed to state "aligns with typical standards"
+    with_ref_clauses = [
+        {
+            "clause_id": "c2",
+            "risk_score": 10,
+            "risk_level": "LOW",
+            "plain_english": "Standard termination notice.",
+            "risk_reasons": [],
+            "retrieved_references": [{"id": "REF-TERM-001", "title": "Termination", "score": 0.91}],
+        }
+    ]
+    res_with_ref = await pipeline.aggregate_document(with_ref_clauses)
+    assert "aligns with typical standards" in res_with_ref.executive_summary.lower()
+    assert "no close reference found" not in res_with_ref.executive_summary.lower()

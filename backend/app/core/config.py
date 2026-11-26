@@ -93,7 +93,7 @@ class Settings(BaseSettings):
     # GEMINI_LLM_MODEL is a backward-compatibility alias.
     # When unset, the separate gemini_clause_model and gemini_summary_model settings are used.
     gemini_llm_model: str = "gemini-3.5-flash-lite"
-    gemini_analysis_batch_size: int = 4
+    gemini_analysis_batch_size: int = 8
     # Temperature, top_p, and top_k are omitted by default (3.5 Flash-Lite does not accept them):
     gemini_temperature: float | None = None
     gemini_top_p: float | None = None
@@ -105,12 +105,21 @@ class Settings(BaseSettings):
     def check_pinned_models(self) -> list[str]:
         """Check if any configured Gemini models are unpinned aliases, preview, or experimental."""
         warnings: list[str] = []
-        for setting_name in ["gemini_clause_model", "gemini_summary_model", "gemini_embedding_model"]:
+        for setting_name in [
+            "gemini_clause_model",
+            "gemini_summary_model",
+            "gemini_embedding_model",
+        ]:
             val = getattr(self, setting_name, "")
             if not val:
                 continue
             lower_val = val.lower()
-            if "-latest" in lower_val or "preview" in lower_val or "exp" in lower_val or "experimental" in lower_val:
+            if (
+                "-latest" in lower_val
+                or "preview" in lower_val
+                or "exp" in lower_val
+                or "experimental" in lower_val
+            ):
                 warnings.append(
                     f"Setting '{setting_name}' is set to '{val}'. It is an alias, preview, or experimental. "
                     f"A pinned model (e.g. 'gemini-3.5-flash-lite') is strongly recommended."
@@ -185,6 +194,11 @@ class Settings(BaseSettings):
 
     # ── Privacy & Logging Policy (Rule 6: Never log document text) ───────────
     enable_text_logging: bool = False  # MUST remain False in all environments
+
+    # ── Deterministic Latency Fake Harness (APP_ENV=test only) ───────────────
+    use_latency_fake: bool = False
+    latency_fake_min_seconds: float = 10.0
+    latency_fake_max_seconds: float = 14.0
 
     @property
     def max_file_size_bytes(self) -> int:

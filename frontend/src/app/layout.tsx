@@ -23,7 +23,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "LegalSimplifier AI | Clause-Level Contract Risk Analysis & RAG",
   description:
-    "AI platform for legal clause risk analysis, RAG compliance benchmarking, and automated policy simplification using Google Gemini.",
+    "AI platform for legal clause risk analysis, RAG compliance benchmarking, and automated policy simplification.",
 };
 
 export default function RootLayout({

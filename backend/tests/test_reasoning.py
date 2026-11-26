@@ -28,6 +28,7 @@ from app.ai.vector_store import InMemoryVectorStore
 # Test Rule 3: Structured Output Schema Validation & Risk Levels
 # ---------------------------------------------------------------------------
 
+
 def test_clause_analysis_valid_schema():
     """Verify LLMClauseAnalysis correctly validates and handles all 4 risk tiers."""
     for level in ["LOW", "MEDIUM", "HIGH", "CRITICAL"]:
@@ -80,6 +81,7 @@ def test_clause_analysis_score_bounds():
 # ---------------------------------------------------------------------------
 # Test Rule 2: Grounding Validator
 # ---------------------------------------------------------------------------
+
 
 def test_grounding_exact_quote():
     """Verify risk reasons citing verbatim clause text pass grounding check."""
@@ -150,6 +152,7 @@ def test_grounding_rejection_of_hallucinated_claims():
 # Test Rule 4: Honest Uncertainty & Professional Phrasing
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_honest_uncertainty_phrasing():
     """Verify risk analysis avoids saying 'unenforceable' and recommends legal review."""
@@ -172,6 +175,7 @@ async def test_honest_uncertainty_phrasing():
 # ---------------------------------------------------------------------------
 # Test Rule 5: Prompt Injection Defense
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_prompt_injection_defense():
@@ -205,25 +209,30 @@ async def test_prompt_injection_defense():
 # Test Rule 1: Retrieval Before Reasoning Pipeline
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_pipeline_with_retrieved_reference():
     """Verify pipeline integrates retrieval context into prompt and validates output."""
     embedder = GeminiEmbedder(force_offline=True)
-    vector_store = InMemoryVectorStore(expected_dim=embedder.dimension, expected_model=embedder.model_name)
+    vector_store = InMemoryVectorStore(
+        expected_dim=embedder.dimension, expected_model=embedder.model_name
+    )
 
     # Seed vector store with reference clause
     ref_vec = await embedder.embed_query("Limitation of liability aggregate cap standard")
-    await vector_store.add_vectors([
-        VectorRecord(
-            id="REF-LIAB-001",
-            vector=ref_vec,
-            metadata={
-                "title": "Mutual 12-Month Liability Cap",
-                "category": "Limitation of Liability",
-                "text": "Each party's total aggregate liability shall be limited to amounts paid in preceding 12 months.",
-            },
-        )
-    ])
+    await vector_store.add_vectors(
+        [
+            VectorRecord(
+                id="REF-LIAB-001",
+                vector=ref_vec,
+                metadata={
+                    "title": "Mutual 12-Month Liability Cap",
+                    "category": "Limitation of Liability",
+                    "text": "Each party's total aggregate liability shall be limited to amounts paid in preceding 12 months.",
+                },
+            )
+        ]
+    )
 
     llm = GeminiLLMClient(force_offline=True)
     pipeline = RiskAnalysisPipeline(
@@ -247,7 +256,9 @@ async def test_pipeline_with_retrieved_reference():
 async def test_pipeline_no_reference_found_flag():
     """Verify pipeline properly handles queries that yield no reference above threshold."""
     embedder = GeminiEmbedder(force_offline=True)
-    empty_vector_store = InMemoryVectorStore(expected_dim=embedder.dimension, expected_model=embedder.model_name)
+    empty_vector_store = InMemoryVectorStore(
+        expected_dim=embedder.dimension, expected_model=embedder.model_name
+    )
     llm = GeminiLLMClient(force_offline=True)
 
     pipeline = RiskAnalysisPipeline(
@@ -269,6 +280,7 @@ async def test_pipeline_no_reference_found_flag():
 # ---------------------------------------------------------------------------
 # Test Document Risk Aggregation
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_document_risk_aggregation():
@@ -308,7 +320,9 @@ async def test_document_risk_aggregation():
         },
     ]
 
-    doc_analysis = await pipeline.aggregate_document(clause_results=clauses, document_type="Terms of Service")
+    doc_analysis = await pipeline.aggregate_document(
+        clause_results=clauses, document_type="Terms of Service"
+    )
 
     assert isinstance(doc_analysis, DocumentRiskAnalysis)
     assert doc_analysis.overall_risk_level in ("HIGH", "CRITICAL")

@@ -3,7 +3,8 @@
 /**
  * Authentication context provider.
  *
- * Manages JWT tokens, user state, login/logout/register flows.
+ * Manages JWT tokens, user state, login/logout/register flows,
+ * closing active SSE connections and clearing cached queries on logout.
  */
 
 import {
@@ -15,8 +16,10 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import type { User, LoginRequest, RegisterRequest, TokenResponse } from "@/types/api";
 import apiClient from "@/lib/api-client";
+import { closeAllDocumentStreams } from "@/lib/sse-registry";
 
 interface AuthContextValue {
   user: User | null;
@@ -31,6 +34,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -75,6 +79,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    closeAllDocumentStreams();
+    void queryClient.cancelQueries();
+    queryClient.clear();
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     setUser(null);

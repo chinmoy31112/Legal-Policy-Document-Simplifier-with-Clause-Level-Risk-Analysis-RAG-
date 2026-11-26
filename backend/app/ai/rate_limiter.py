@@ -11,6 +11,7 @@ Enforces:
 """
 
 import asyncio
+import contextvars
 import random
 import time
 from enum import Enum
@@ -214,11 +215,8 @@ class SharedModelRateLimiter:
         self.max_rpm = max(1, max_rpm if max_rpm is not None else limits["rpm"])
         self.max_tpm = max(100, max_tpm if max_tpm is not None else limits["tpm"])
         self.max_rpd = max(1, max_rpd if max_rpd is not None else limits["rpd"])
-        self.min_interval = (
-            min_interval
-            if min_interval is not None
-            else (60.0 / self.max_rpm if self.max_rpm >= 10 else 0.0)
-        )
+        # Sliding-window limiter without artificial fixed inter-request delay
+        self.min_interval = min_interval if min_interval is not None else 0.0
         self.circuit_breaker = CircuitBreaker(model_name=model_name)
 
         self._redis_url = redis_url or settings.redis_url
@@ -234,6 +232,9 @@ class SharedModelRateLimiter:
         self._daily_quota_date: str | None = None
         self._daily_quota_notice: str | None = None
         self._lock = asyncio.Lock()
+        self._active_slot_var: contextvars.ContextVar[tuple[str, int] | None] = (
+            contextvars.ContextVar(f"_rate_slot_{model_name}", default=None)
+        )
 
     @property
     def is_daily_quota_exhausted(self) -> bool:
@@ -245,6 +246,7 @@ class SharedModelRateLimiter:
             return False
 
         from datetime import datetime, timezone
+
         today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         if self._daily_quota_date and self._daily_quota_date != today_str:
             # Midnight UTC reset has passed: auto-expire the flag
@@ -256,18 +258,70 @@ class SharedModelRateLimiter:
 
         return True
 
+    def _set_redis_daily_exhausted_sync(
+        self, flag_ttl: int | None, notice: str | None = None
+    ) -> None:
+        """Persist or clear daily-quota exhausted marker in Redis with reset-time TTL."""
+        if not self._redis_available:
+            return
+        try:
+            import redis
+
+            r = redis.from_url(
+                self._redis_url,
+                decode_responses=True,
+                socket_connect_timeout=0.2,
+                socket_timeout=0.2,
+            )
+            key = f"ratelimit:daily_exhausted:{self.model_name}"
+            if flag_ttl and flag_ttl > 0:
+                r.set(key, notice or "1", ex=int(flag_ttl))
+            else:
+                r.delete(key)
+        except Exception:
+            pass
+
+    async def is_daily_quota_exhausted_async(self) -> bool:
+        """Check both in-memory reset expiry and cross-process Redis TTL flag."""
+        redis_client = await self._get_redis()
+        if redis_client is not None:
+            try:
+                val = await redis_client.get(f"ratelimit:daily_exhausted:{self.model_name}")
+                if val is not None:
+                    self._daily_quota_exhausted = True
+                    from datetime import datetime, timezone
+
+                    self._daily_quota_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                    self._daily_quota_notice = str(val)
+                    return True
+                # Cross-process reset cleared Redis (e.g. /resume endpoint in API process)
+                if self._daily_quota_exhausted:
+                    self._daily_quota_exhausted = False
+                    self._daily_quota_date = None
+                    self._daily_quota_notice = None
+                return False
+            except Exception:
+                pass
+        return self.is_daily_quota_exhausted
+
     def mark_daily_quota_exhausted(self, notice: str | None = None) -> None:
-        """Atomically mark daily quota exhausted across all concurrent tasks sharing this limiter."""
+        """Atomically mark daily quota exhausted across tasks & Redis until UTC reset."""
+        import math
         from datetime import datetime, timezone
+
         today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         self._daily_quota_exhausted = True
         self._daily_quota_date = today_str
         self._daily_quota_notice = (
-            notice or f"Daily API quota reached for model '{self.model_name}'. Resumes after daily quota reset."
+            notice
+            or f"Daily API quota reached for model '{self.model_name}'. Resumes after daily quota reset."
         )
+        ttl_seconds = max(1, int(math.ceil(self._seconds_until_midnight_utc())))
+        self._set_redis_daily_exhausted_sync(ttl_seconds, self._daily_quota_notice)
         logger.warning(
             "shared_rate_limiter_daily_quota_exhausted_flag_set",
             model=self.model_name,
+            expires_in_seconds=ttl_seconds,
             notice=self._daily_quota_notice,
         )
 
@@ -278,12 +332,14 @@ class SharedModelRateLimiter:
             self._daily_quota_exhausted = False
             self._daily_quota_date = None
             self._daily_quota_notice = None
+            self._set_redis_daily_exhausted_sync(None)
 
     def reset_daily_quota_exhausted(self) -> None:
         """Manually reset the shared daily quota exhausted flag."""
         self._daily_quota_exhausted = False
         self._daily_quota_date = None
         self._daily_quota_notice = None
+        self._set_redis_daily_exhausted_sync(None)
 
     def _seconds_until_midnight_utc(self) -> float:
         from datetime import datetime, timedelta, timezone
@@ -362,13 +418,17 @@ class SharedModelRateLimiter:
                 self._redis = None
         return self._redis
 
-    async def acquire(self, estimated_tokens: int = 1) -> None:
+    async def acquire(self, estimated_tokens: int = 1) -> str | None:
         """
         Wait until capacity is available under both RPM and TPM quotas.
-        Logs telemetry and emits a warning when utilization exceeds 80%.
+        Checks cancellation flags before waiting, during waits, and upon slot acquisition.
         """
-        # Fast-fail immediately if daily quota is already marked exhausted by any sibling batch
-        if self._daily_quota_exhausted:
+        from app.core.cancellation import cancel_aware_sleep, check_not_cancelled, is_cancelled
+
+        await check_not_cancelled()
+
+        # Fast-fail immediately if daily quota is already marked exhausted by any sibling batch or worker
+        if await self.is_daily_quota_exhausted_async():
             raise DailyQuotaExceededError(
                 model_name=self.model_name,
                 current_rpd=self.max_rpd,
@@ -378,6 +438,8 @@ class SharedModelRateLimiter:
             )
 
         while True:
+            await check_not_cancelled()
+
             if self._daily_quota_exhausted:
                 raise DailyQuotaExceededError(
                     model_name=self.model_name,
@@ -395,7 +457,7 @@ class SharedModelRateLimiter:
                     model=self.model_name,
                     wait_seconds=round(cb_wait, 2),
                 )
-                await asyncio.sleep(cb_wait)
+                await cancel_aware_sleep(cb_wait)
                 continue
 
             # 2. Acquire from Redis or fallback to In-Memory
@@ -411,7 +473,9 @@ class SharedModelRateLimiter:
                         raise exc
                     logger.warning("redis_rate_limit_error_fallback", error=str(exc))
                     self._redis = None
-                    allowed, wait_sec, cur_rpm, cur_tpm = await self._acquire_memory(estimated_tokens)
+                    allowed, wait_sec, cur_rpm, cur_tpm = await self._acquire_memory(
+                        estimated_tokens
+                    )
             else:
                 allowed, wait_sec, cur_rpm, cur_tpm = await self._acquire_memory(estimated_tokens)
 
@@ -442,19 +506,63 @@ class SharedModelRateLimiter:
                 )
 
             if allowed:
-                return
+                slot = self._active_slot_var.get()
+                member_id = slot[0] if slot else None
+                # Final cancellation check right after slot acquisition so cancelled jobs release slots
+                if await is_cancelled():
+                    await self.release_slot(member_id=member_id, refund_rpd=True)
+                    await check_not_cancelled()
+                return member_id
 
-            if wait_sec > 0:
-                # Add slight random jitter (50ms - 200ms) to avoid lockstep wakeups
-                sleep_duration = wait_sec + random.uniform(0.05, 0.20)
-                logger.info(
-                    "gemini_rate_limit_throttle_wait",
-                    model=self.model_name,
-                    wait_seconds=round(sleep_duration, 2),
-                    current_rpm=cur_rpm,
-                    current_tpm=cur_tpm,
-                )
-                await asyncio.sleep(sleep_duration)
+            # Avoid busy-waiting: if wait_sec <= 0 or uncalculated, sleep at least 0.5s with cancel polling
+            effective_wait = max(0.5, wait_sec)
+            sleep_duration = effective_wait + random.uniform(0.05, 0.20)
+            logger.info(
+                "gemini_rate_limit_throttle_wait",
+                model=self.model_name,
+                wait_seconds=round(sleep_duration, 2),
+                current_rpm=cur_rpm,
+                current_tpm=cur_tpm,
+            )
+            await cancel_aware_sleep(sleep_duration)
+
+    async def release_slot(self, member_id: str | None = None, refund_rpd: bool = True) -> None:
+        """
+        Release a previously acquired limiter slot (RPM/TPM entry and optional RPD refund)
+        when a job is cancelled before dispatching its outbound Gemini request.
+        """
+        from datetime import datetime, timezone
+
+        slot = self._active_slot_var.get()
+        target_id = member_id or (slot[0] if slot else None)
+        target_tokens = slot[1] if slot else None
+        self._active_slot_var.set(None)
+
+        if not target_id:
+            return
+
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        async with self._lock:
+            before_len = len(self._local_history)
+            self._local_history = [e for e in self._local_history if e[2] != target_id]
+            if refund_rpd and len(self._local_history) < before_len:
+                self._daily_counts[today_str] = max(0, self._daily_counts.get(today_str, 0) - 1)
+
+        redis_client = await self._get_redis()
+        if redis_client is not None:
+            try:
+                rpm_key = f"ratelimit:rpm:{self.model_name}"
+                tpm_key = f"ratelimit:tpm:{self.model_name}"
+                rpd_key = f"ratelimit:rpd:{self.model_name}:{today_str}"
+                removed = await redis_client.zrem(rpm_key, target_id)
+                if target_tokens is not None:
+                    await redis_client.zrem(tpm_key, f"{target_id}:{target_tokens}")
+                if refund_rpd and removed:
+                    cur = await redis_client.decr(rpd_key)
+                    if cur is not None and int(cur) < 0:
+                        await redis_client.set(rpd_key, "0", ex=90000)
+            except Exception:
+                pass
 
     async def _acquire_redis(
         self, redis_client: aioredis.Redis, tokens: int
@@ -515,9 +623,12 @@ class SharedModelRateLimiter:
                 now_mono = time.monotonic()
                 spacing_wait = max(0.0, (self._last_dispatch_time + self.min_interval) - now_mono)
                 if allowed and spacing_wait > 0:
+                    await redis_client.zrem(rpm_key, member_id)
+                    await redis_client.zrem(tpm_key, f"{member_id}:{tokens}")
                     return False, spacing_wait, cur_rpm, cur_tpm
                 if allowed:
                     self._last_dispatch_time = now_mono
+                    self._active_slot_var.set((member_id, tokens))
                     # Record daily request in Redis
                     await redis_client.incr(rpd_key)
                     await redis_client.expire(rpd_key, 90000)
@@ -563,9 +674,7 @@ class SharedModelRateLimiter:
             cutoff = now_mono - 60.0
 
             # Prune older than 60s
-            self._local_history = [
-                entry for entry in self._local_history if entry[0] > cutoff
-            ]
+            self._local_history = [entry for entry in self._local_history if entry[0] > cutoff]
 
             cur_rpm = len(self._local_history)
             cur_tpm = sum(entry[1] for entry in self._local_history)
@@ -584,10 +693,11 @@ class SharedModelRateLimiter:
                 return False, spacing_wait, cur_rpm, cur_tpm
 
             # Grant capacity
-            member_id = f"{now_mono:.4f}"
+            member_id = f"{now_mono:.6f}_{random.randint(1000, 9999)}"
             self._local_history.append((now_mono, tokens, member_id))
             self._last_dispatch_time = now_mono
             self._daily_counts[today_str] = cur_rpd + 1
+            self._active_slot_var.set((member_id, tokens))
             return True, 0.0, cur_rpm + 1, cur_tpm + tokens
 
 
@@ -696,6 +806,6 @@ def calculate_jittered_backoff(
     if retry_after is not None and retry_after > 0:
         return retry_after + random.uniform(0.1, 0.8)
 
-    base = min(max_wait, min_wait * (2 ** attempt))
+    base = min(max_wait, min_wait * (2**attempt))
     jitter = random.uniform(0.1, 0.5 * (attempt + 1))
     return base + jitter

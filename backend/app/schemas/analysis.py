@@ -95,3 +95,6 @@ class AnalysisStatusResponse(BaseModel):
     total_clauses: int = 0
     analyzed_clauses: int = 0
     message: str | None = None
+    job_id: UUID | None = None
+    job_status: str | None = None
+    stage: str | None = None

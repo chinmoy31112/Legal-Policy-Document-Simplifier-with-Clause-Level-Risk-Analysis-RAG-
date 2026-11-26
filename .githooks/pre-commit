@@ -1,0 +1,26 @@
+#!/bin/sh
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+if [ -x "backend/venv/Scripts/ruff.exe" ]; then
+    RUFF_BIN="backend/venv/Scripts/ruff.exe"
+elif [ -x "backend/venv/bin/ruff" ]; then
+    RUFF_BIN="backend/venv/bin/ruff"
+elif command -v ruff >/dev/null 2>&1; then
+    RUFF_BIN="ruff"
+else
+    echo "pre-commit: ruff not found in backend/venv or PATH" >&2
+    exit 1
+fi
+
+STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^backend/.*\.py$' | grep -v -E '^backend/(alembic|venv|\.venv)/' || true)
+if [ -z "$STAGED_PY" ]; then
+    exit 0
+fi
+
+echo "Running pre-commit ruff --fix & ruff format on staged Python files..."
+"$RUFF_BIN" check --fix $STAGED_PY
+"$RUFF_BIN" format $STAGED_PY
+git add $STAGED_PY

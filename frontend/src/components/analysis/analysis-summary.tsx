@@ -1,24 +1,29 @@
 "use client";
 
 import * as React from "react";
-import { DocumentAnalysis } from "@/types/analysis";
+import { ClauseAnalysis, DocumentAnalysis } from "@/types/analysis";
 import { FileDown, FileJson, FileText } from "lucide-react";
 import { API_BASE_URL } from "@/lib/constants";
 import { RiskChip } from "@/components/ui/risk-chip";
 import { Button } from "@/components/ui/button";
 import { pluralize } from "@/lib/utils";
+import { computeClauseCounts } from "@/lib/clause-stats";
 
 interface AnalysisSummaryProps {
   analysis: DocumentAnalysis;
   documentId?: string;
+  clauses?: ClauseAnalysis[] | null;
   clauseCount?: number;
+  isProvisional?: boolean;
   className?: string;
 }
 
 export function AnalysisSummary({
   analysis,
   documentId,
+  clauses,
   clauseCount,
+  isProvisional = false,
   className = "",
 }: AnalysisSummaryProps) {
   const score = analysis.overall_risk_score;
@@ -30,7 +35,9 @@ export function AnalysisSummary({
 
   if (isNonLegal) {
     return (
-      <div className={`p-6 rounded-[18px] border border-[var(--border)] bg-[var(--card)] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 select-none ${className}`}>
+      <div
+        className={`p-6 rounded-[18px] border border-[var(--border)] bg-[var(--card)] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 select-none ${className}`}
+      >
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-[14px] bg-[var(--soft-surface)] border border-[var(--border)] flex items-center justify-center shrink-0 text-[var(--accent)]">
             <FileText className="w-7 h-7" />
@@ -65,38 +72,42 @@ export function AnalysisSummary({
     }
   }
 
-  const distribution =
-    typeof analysis.risk_distribution === "string"
-      ? JSON.parse(analysis.risk_distribution)
-      : analysis.risk_distribution || {};
+  const counts = computeClauseCounts(clauses, analysis.risk_distribution);
+  const totalEvaluated = counts.total || clauseCount || 0;
+  const showProvisional =
+    isProvisional ||
+    Boolean(analysis.is_provisional) ||
+    Boolean(
+      analysis.overall_summary &&
+        analysis.overall_summary.includes("Finalizing summary")
+    );
 
-  const standardCount =
-    Number(distribution.standard || 0) + Number(distribution.low || 0) + Number(distribution.LOW || 0);
-  const unusualCount =
-    Number(distribution.slightly_unusual || 0);
-  const oneSidedCount =
-    Number(distribution.one_sided || 0) + Number(distribution.medium || 0) + Number(distribution.MEDIUM || 0);
-  const highRiskCount =
-    Number(distribution.high_risk || 0) + Number(distribution.high || 0) + Number(distribution.HIGH || 0);
-  const unenforceableCount =
-    Number(distribution.potentially_unenforceable || 0) + Number(distribution.critical || 0) + Number(distribution.CRITICAL || 0);
-
-  let totalFromDistribution =
-    standardCount + unusualCount + oneSidedCount + highRiskCount + unenforceableCount;
-
-  if (totalFromDistribution === 0 && distribution && typeof distribution === "object") {
-    if ("total_clauses" in distribution && Number(distribution.total_clauses) > 0) {
-      totalFromDistribution = Number(distribution.total_clauses);
-    } else {
-      for (const val of Object.values(distribution)) {
-        if (val && typeof val === "object" && "clause_count" in val) {
-          totalFromDistribution += Number((val as { clause_count?: number }).clause_count || 0);
-        }
-      }
-    }
-  }
-
-  const totalEvaluated = clauseCount || totalFromDistribution || 1;
+  const segments = [
+    {
+      key: "standard",
+      label: "Standard",
+      count: counts.standard,
+      colorClass: "bg-[var(--risk-standard-text)]",
+    },
+    {
+      key: "slightly_unusual",
+      label: "Slightly Unusual",
+      count: counts.slightlyUnusual,
+      colorClass: "bg-[var(--risk-unusual-text)]",
+    },
+    {
+      key: "one_sided",
+      label: "One-Sided",
+      count: counts.oneSided,
+      colorClass: "bg-[var(--risk-onesided-text)]",
+    },
+    {
+      key: "high_risk",
+      label: "High Risk",
+      count: counts.highRisk + counts.unenforceable,
+      colorClass: "bg-[var(--risk-high-text)]",
+    },
+  ].filter((seg) => seg.count > 0);
 
   const handleDownload = (format: "json" | "markdown" | "pdf") => {
     const docId = documentId || analysis.document_id;
@@ -126,14 +137,25 @@ export function AnalysisSummary({
   };
 
   return (
-    <div className={`space-y-4 select-none ${className}`}>
+    <div className={`space-y-4 select-none ${className}`} data-testid="analysis-summary">
       {/* Main Overall Risk Card */}
       <div className="p-5 sm:p-6 rounded-[18px] border border-[var(--border)] bg-[var(--card)] space-y-3.5">
         {/* Top Alignment Bar: Badges on left, Download Options in-line on right */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-[var(--border)]/30">
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             <RiskChip category={overallCategory} size="sm" />
-            <span className="text-xs text-[var(--muted-foreground)] font-medium">
+            {showProvisional && (
+              <span
+                data-testid="provisional-score-badge"
+                className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse"
+              >
+                Provisional
+              </span>
+            )}
+            <span
+              data-testid="summary-clause-count"
+              className="text-xs text-[var(--muted-foreground)] font-medium"
+            >
               {pluralize(totalEvaluated, "clause")} evaluated
             </span>
           </div>
@@ -173,11 +195,14 @@ export function AnalysisSummary({
         {/* Content Row: Score Pillar & Justified Executive Summary Text */}
         <div className="flex items-start gap-4 pt-1">
           <div className="w-20 h-20 rounded-[14px] bg-[var(--soft-surface)] border border-[var(--border)] flex flex-col items-center justify-center shrink-0">
-            <span className="font-serif text-3xl font-bold text-[var(--foreground)] tabular-nums leading-none">
+            <span
+              data-testid="overall-risk-score"
+              className="font-serif text-3xl font-bold text-[var(--foreground)] tabular-nums leading-none"
+            >
               {score}
             </span>
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mt-1">
-              Risk Score
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mt-1 text-center px-1">
+              {showProvisional ? "Provisional" : "Risk Score"}
             </span>
           </div>
 
@@ -186,6 +211,38 @@ export function AnalysisSummary({
               "Contract clause risk analysis evaluated with sequential grounding against standard commercial precedents."}
           </p>
         </div>
+
+        {/* Multi-segment Risk Breakdown Bar (driven from the same clause counts as filters) */}
+        {totalEvaluated > 0 && segments.length > 0 && (
+          <div className="pt-2 space-y-1.5" data-testid="risk-breakdown-container">
+            <div
+              data-testid="risk-breakdown-bar"
+              className="h-2 w-full bg-[var(--soft-surface)] rounded-full overflow-hidden flex gap-0.5 border border-[var(--border)]"
+              role="img"
+              aria-label={`Clause risk distribution across ${pluralize(totalEvaluated, "clause")}`}
+            >
+              {segments.map((seg) => (
+                <div
+                  key={seg.key}
+                  data-testid={`breakdown-segment-${seg.key}`}
+                  className={`${seg.colorClass} h-full transition-all duration-300`}
+                  style={{ width: `${(seg.count / totalEvaluated) * 100}%` }}
+                  title={`${seg.label}: ${pluralize(seg.count, "clause")}`}
+                />
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-[var(--muted-foreground)]">
+              {segments.map((seg) => (
+                <span key={seg.key} className="inline-flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${seg.colorClass}`} />
+                  <span>
+                    {seg.label}: <strong className="text-[var(--foreground)]">{seg.count}</strong>
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

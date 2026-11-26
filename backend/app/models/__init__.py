@@ -9,7 +9,8 @@ from app.models.analysis import AnalysisResult, DocumentAnalysis
 from app.models.audit_log import AuditLog
 from app.models.clause import Clause
 from app.models.document import Document
-from app.models.knowledge_base import KBClause, KBDocument
+from app.models.job import JOB_STATES, Job
+from app.models.knowledge_base import KBClause, KBDocument, ReferenceClause
 from app.models.user import User
 
 __all__ = [
@@ -20,5 +21,8 @@ __all__ = [
     "DocumentAnalysis",
     "KBDocument",
     "KBClause",
+    "ReferenceClause",
+    "Job",
+    "JOB_STATES",
     "AuditLog",
 ]

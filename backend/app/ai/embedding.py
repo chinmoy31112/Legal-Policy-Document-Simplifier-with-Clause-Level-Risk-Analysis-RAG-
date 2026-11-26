@@ -16,6 +16,7 @@ from google import genai
 from google.genai import types
 
 from app.ai.interfaces import Embedder
+from app.ai.ledger import get_call_ledger
 from app.ai.rate_limiter import (
     calculate_jittered_backoff,
     get_model_rate_limiter,
@@ -44,11 +45,7 @@ class EmbeddingRPMThrottle:
 
     def __init__(self, max_rpm: int = 80, min_interval: float | None = None):
         self.max_rpm = max(1, max_rpm)
-        self.min_interval = (
-            min_interval
-            if min_interval is not None
-            else (60.0 / self.max_rpm if self.max_rpm >= 10 else 0.0)
-        )
+        self.min_interval = min_interval if min_interval is not None else 0.0
         self._timestamps: list[float] = []
         self._last_call_time: float = 0.0
         self._lock = asyncio.Lock()
@@ -127,7 +124,14 @@ class GeminiEmbedder(Embedder):
             self._rate_limiter = get_model_rate_limiter(self._model_name, max_rpm=self._rpm)
         self._throttle = self._rate_limiter
         self._cache: dict[str, list[float]] = {}
-        self._offline_mode = force_offline or self.settings.app_env == "test" or not bool(self.settings.google_api_key.strip())
+        from app.core.cancellation import register_cache_store
+
+        register_cache_store("embed", self._cache)
+        self._offline_mode = (
+            force_offline
+            or self.settings.app_env == "test"
+            or not bool(self.settings.google_api_key.strip())
+        )
 
         if self._offline_mode:
             logger.info(
@@ -331,15 +335,32 @@ class GeminiEmbedder(Embedder):
         Call Google GenAI SDK embed_content with RPM throttling and exponential backoff.
         Every attempt (including retries) acquires from the rate limiter.
         """
+        from app.core.cancellation import check_not_cancelled, is_cancelled
+
+        await check_not_cancelled()
         if self._client is None or self._offline_mode:
+            ledger = get_call_ledger()
+            ledger.record_call(
+                purpose="embed",
+                status="ok",
+                latency=0.005,
+                tokens=max(1, sum(len(t.split()) for t in texts) * 2),
+                model_name=self._model_name,
+                attempt_number=1,
+            )
             return [self._generate_offline_embedding(t) for t in texts]
 
         max_attempts = getattr(self.settings, "embedding_max_attempts", 5)
         for attempt in range(max_attempts):
+            await check_not_cancelled()
             # Every attempt, including retries, goes through the shared model rate limiter
             est_tokens = max(1, sum(len(t.split()) for t in texts) * 2)
-            await self._rate_limiter.acquire(estimated_tokens=est_tokens)
+            slot_id = await self._rate_limiter.acquire(estimated_tokens=est_tokens)
+            if await is_cancelled():
+                await self._rate_limiter.release_slot(member_id=slot_id, refund_rpd=True)
+                await check_not_cancelled()
 
+            t_call = time.perf_counter()
             try:
                 config = types.EmbedContentConfig(
                     task_type=task_type,
@@ -351,18 +372,71 @@ class GeminiEmbedder(Embedder):
                     config=config,
                 )
                 await self._rate_limiter.circuit_breaker.record_success()
+                ledger = get_call_ledger()
+                ledger.record_call(
+                    purpose="retry" if attempt > 0 else "embed",
+                    status="ok",
+                    latency=time.perf_counter() - t_call,
+                    tokens=est_tokens,
+                    model_name=self._model_name,
+                    attempt_number=attempt + 1,
+                )
                 return [e.values for e in response.embeddings]  # type: ignore[misc, union-attr]
             except Exception as exc:
+                from app.ai.llm import is_daily_quota_error
+                from app.ai.rate_limiter import DailyQuotaExceededError
+
                 err_str = str(exc)
-                if any(m in err_str for m in ["RESOURCE_EXHAUSTED", "429", "quota", "503", "UNAVAILABLE", "502", "504", "high demand"]):
+                call_elapsed = time.perf_counter() - t_call
+                if is_daily_quota_error(err_str):
+                    call_status = "429 day"
+                elif any(m in err_str for m in ["RESOURCE_EXHAUSTED", "429", "quota"]):
+                    call_status = "429 minute"
+                else:
+                    call_status = "503" if "503" in err_str else "error"
+                ledger = get_call_ledger()
+                ledger.record_call(
+                    purpose="retry" if attempt > 0 else "embed",
+                    status=call_status,
+                    latency=call_elapsed,
+                    tokens=est_tokens,
+                    model_name=self._model_name,
+                    attempt_number=attempt + 1,
+                )
+                if is_daily_quota_error(err_str):
+                    self._rate_limiter.mark_daily_quota_exhausted(notice=err_str)
+                    raise DailyQuotaExceededError(
+                        model_name=self._model_name,
+                        current_rpd=self._rate_limiter.max_rpd,
+                        max_rpd=self._rate_limiter.max_rpd,
+                        seconds_until_reset=self._rate_limiter._seconds_until_midnight_utc(),
+                        notice="Daily embedding API quota reached. Job paused and will resume automatically after the daily quota reset.",
+                    ) from exc
+                if any(
+                    m in err_str
+                    for m in [
+                        "RESOURCE_EXHAUSTED",
+                        "429",
+                        "quota",
+                        "503",
+                        "UNAVAILABLE",
+                        "502",
+                        "504",
+                        "high demand",
+                    ]
+                ):
                     import re
 
                     match = re.search(r"retry\s+in\s+([\d.]+)s", err_str) or re.search(
                         r"'retryDelay':\s*'(\d+)s'", err_str
                     )
                     retry_delay = float(match.group(1)) + 0.5 if match else (2.0 * (attempt + 1))
-                    cb_wait = await self._rate_limiter.circuit_breaker.record_failure(retry_after=retry_delay)
-                    delay = calculate_jittered_backoff(attempt=attempt, retry_after=max(retry_delay, cb_wait))
+                    cb_wait = await self._rate_limiter.circuit_breaker.record_failure(
+                        retry_after=retry_delay
+                    )
+                    delay = calculate_jittered_backoff(
+                        attempt=attempt, retry_after=max(retry_delay, cb_wait)
+                    )
 
                     logger.warning(
                         "gemini_rate_limit_or_unavailable_retrying",
@@ -374,7 +448,7 @@ class GeminiEmbedder(Embedder):
                         throttle_rpm=self._rpm,
                     )
                     if attempt < max_attempts - 1:
-                        await asyncio.sleep(delay)
+                        # Limiter acquire on next attempt handles circuit breaker / sliding window pacing
                         continue
                     raise GeminiRateLimitError(err_str) from exc
 
@@ -437,7 +511,9 @@ class GeminiEmbedder(Embedder):
         # 3. Batch all remaining cache misses into as few requests as possible
         if misses_texts:
             if self._offline_mode:
-                clause_batch_embeddings = [self._generate_offline_embedding(t) for t in misses_texts]
+                clause_batch_embeddings = [
+                    self._generate_offline_embedding(t) for t in misses_texts
+                ]
                 for local_idx, emb in enumerate(clause_batch_embeddings):
                     global_idx = misses_indices[local_idx]
                     t = misses_texts[local_idx]
@@ -451,7 +527,9 @@ class GeminiEmbedder(Embedder):
                     clause_batch_indices = misses_indices[i : i + batch_size]
 
                     try:
-                        clause_batch_embeddings = await self._call_api_batch(clause_batch_texts, task_type)
+                        clause_batch_embeddings = await self._call_api_batch(
+                            clause_batch_texts, task_type
+                        )
                     except Exception as exc:
                         logger.error("embedding_generation_batch_error", error=str(exc))
                         # Graceful fallback on permanent failure, preserving cache
@@ -465,12 +543,16 @@ class GeminiEmbedder(Embedder):
                         comp_key = self._cache_key(t, task_type)
                         self._cache[comp_key] = emb
                         results[global_idx] = emb
+                        from app.core.cancellation import record_cache_key, track_redis_cache_key
+
+                        record_cache_key("embed", comp_key)
 
                         # Persist to shared Redis hash cache for multi-document reuse
                         if redis_client is not None:
                             try:
                                 r_key = f"embedcache:{comp_key}"
                                 await redis_client.set(r_key, json.dumps(emb), ex=86400 * 30)
+                                await track_redis_cache_key(r_key)
                             except Exception:
                                 pass
 

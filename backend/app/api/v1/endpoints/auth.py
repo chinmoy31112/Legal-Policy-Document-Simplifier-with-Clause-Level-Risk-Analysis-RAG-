@@ -100,16 +100,21 @@ async def get_profile(
 @router.delete(
     "/me",
     summary="Delete user account (Delete-My-Data)",
-    description="Permanently delete user account and all uploaded documents, clauses, and analyses.",
+    description="Cancel active jobs, permanently delete user account and all uploaded documents, clauses, and analyses, and report kept metadata.",
 )
 async def delete_account(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
-    """Delete user account and all data (GDPR compliance)."""
+    """Cancel user's jobs, delete user account and all data, and report kept records."""
+    from app.api.v1.endpoints.documents import _active_analysis_tasks
+
     service = AuthService(session)
-    await service.delete_account(user_id)
-    return APIResponse(message="User account and all associated data have been permanently deleted.")
+    report = await service.delete_account(user_id, legacy_tasks_map=_active_analysis_tasks)
+    return APIResponse(
+        data=report,
+        message="User account and all associated data have been permanently deleted.",
+    )
 
 
 @router.post(
@@ -122,6 +127,11 @@ async def delete_account_alias(
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
     """Alias for delete user account."""
+    from app.api.v1.endpoints.documents import _active_analysis_tasks
+
     service = AuthService(session)
-    await service.delete_account(user_id)
-    return APIResponse(message="User account and all associated data have been permanently deleted.")
+    report = await service.delete_account(user_id, legacy_tasks_map=_active_analysis_tasks)
+    return APIResponse(
+        data=report,
+        message="User account and all associated data have been permanently deleted.",
+    )

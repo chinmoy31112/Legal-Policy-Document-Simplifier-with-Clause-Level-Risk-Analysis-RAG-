@@ -5,6 +5,11 @@ import { ClauseAnalysis } from "@/types/analysis";
 import { Document } from "@/types/document";
 import { Search, FileText } from "lucide-react";
 import { RiskChip } from "@/components/ui/risk-chip";
+import {
+  computeClauseCounts,
+  getClauseBucket,
+  type FilterBucket,
+} from "@/lib/clause-stats";
 
 interface DocumentViewerProps {
   document: Document;
@@ -22,33 +27,22 @@ export function DocumentViewer({
   className = "",
 }: DocumentViewerProps) {
   const [search, setSearch] = React.useState("");
-  const [categoryFilter, setCategoryFilter] = React.useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = React.useState<FilterBucket>("all");
 
   const documentText =
     document.raw_text ||
     clauses.map((c) => c.clause?.content || c.plain_english_summary).join("\n\n");
 
+  const counts = React.useMemo(() => computeClauseCounts(clauses), [clauses]);
+
   const filteredClauses = React.useMemo(() => {
     return clauses.filter((analysis) => {
-      // Category filter
       if (categoryFilter !== "all") {
-        const cat = String(analysis.risk_category || "").toLowerCase();
-        if (categoryFilter === "high") {
-          if (!["high", "high_risk", "critical", "potentially_unenforceable"].includes(cat)) {
-            return false;
-          }
-        } else if (categoryFilter === "medium") {
-          if (!["medium", "slightly_unusual", "one_sided"].includes(cat)) {
-            return false;
-          }
-        } else if (categoryFilter === "standard") {
-          if (!["standard", "low"].includes(cat)) {
-            return false;
-          }
+        if (getClauseBucket(analysis.risk_category) !== categoryFilter) {
+          return false;
         }
       }
 
-      // Search filter
       if (search.trim()) {
         const q = search.toLowerCase();
         const content = (analysis.clause?.content || "").toLowerCase();
@@ -81,10 +75,15 @@ export function DocumentViewer({
           />
         </div>
 
-        {/* Category Filter Pills */}
-        <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0" role="group" aria-label="Filter clauses by severity">
+        {/* Category Filter Pills using single clause count source */}
+        <div
+          className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0"
+          role="group"
+          aria-label="Filter clauses by severity"
+        >
           <button
             type="button"
+            data-testid="filter-all"
             onClick={() => setCategoryFilter("all")}
             className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
               categoryFilter === "all"
@@ -92,10 +91,11 @@ export function DocumentViewer({
                 : "bg-[var(--card)] text-[var(--muted-foreground)] border border-[var(--border)] hover:bg-[var(--soft-surface)]"
             }`}
           >
-            All ({clauses.length})
+            All ({counts.filterCounts.all})
           </button>
           <button
             type="button"
+            data-testid="filter-high"
             onClick={() => setCategoryFilter("high")}
             className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
               categoryFilter === "high"
@@ -103,10 +103,11 @@ export function DocumentViewer({
                 : "bg-[var(--card)] text-[var(--muted-foreground)] border border-[var(--border)] hover:bg-[var(--soft-surface)]"
             }`}
           >
-            High Risk
+            High Risk ({counts.filterCounts.high})
           </button>
           <button
             type="button"
+            data-testid="filter-medium"
             onClick={() => setCategoryFilter("medium")}
             className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
               categoryFilter === "medium"
@@ -114,10 +115,11 @@ export function DocumentViewer({
                 : "bg-[var(--card)] text-[var(--muted-foreground)] border border-[var(--border)] hover:bg-[var(--soft-surface)]"
             }`}
           >
-            Medium
+            Medium ({counts.filterCounts.medium})
           </button>
           <button
             type="button"
+            data-testid="filter-standard"
             onClick={() => setCategoryFilter("standard")}
             className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
               categoryFilter === "standard"
@@ -125,12 +127,12 @@ export function DocumentViewer({
                 : "bg-[var(--card)] text-[var(--muted-foreground)] border border-[var(--border)] hover:bg-[var(--soft-surface)]"
             }`}
           >
-            Standard
+            Standard ({counts.filterCounts.standard})
           </button>
         </div>
       </div>
 
-      {/* Document Canvas: 100% Edge-to-Edge document surface with zero outer gap */}
+      {/* Document Canvas */}
       <div className="flex-1 overflow-y-auto bg-white text-[#1A1A1A] p-5 sm:p-7 select-text pdf-canvas-container">
         {/* Paper Title / Header */}
         <div className="border-b border-[#E5E0D8] pb-3 mb-5">
@@ -155,16 +157,20 @@ export function DocumentViewer({
             )}
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3" data-testid="clause-list">
             {filteredClauses.map((analysis) => {
               const isSelected = activeClauseId === analysis.id;
               const cat = String(analysis.risk_category || "").toLowerCase();
 
-              // Semi-transparent risk colors on authentic paper
               let overlayStyles =
                 "border-l-4 rounded-r-[8px] p-3 transition-all cursor-pointer ";
 
-              if (cat === "high" || cat === "high_risk" || cat === "critical" || cat === "potentially_unenforceable") {
+              if (
+                cat === "high" ||
+                cat === "high_risk" ||
+                cat === "critical" ||
+                cat === "potentially_unenforceable"
+              ) {
                 overlayStyles += isSelected
                   ? "bg-[#FAD7D7] border-l-[#8F1D1D] ring-2 ring-[#8F1D1D] "
                   : "bg-[#FAD7D7]/40 border-l-[#8F1D1D] hover:bg-[#FAD7D7]/70 ";
@@ -172,7 +178,11 @@ export function DocumentViewer({
                 overlayStyles += isSelected
                   ? "bg-[#FDE3CF] border-l-[#8A3B00] ring-2 ring-[#8A3B00] "
                   : "bg-[#FDE3CF]/40 border-l-[#8A3B00] hover:bg-[#FDE3CF]/70 ";
-              } else if (cat === "slightly_unusual" || cat === "medium" || cat === "unusual") {
+              } else if (
+                cat === "slightly_unusual" ||
+                cat === "medium" ||
+                cat === "unusual"
+              ) {
                 overlayStyles += isSelected
                   ? "bg-[#FBF0C8] border-l-[#6B4F00] ring-2 ring-[#6B4F00] "
                   : "bg-[#FBF0C8]/40 border-l-[#6B4F00] hover:bg-[#FBF0C8]/70 ";
@@ -189,7 +199,6 @@ export function DocumentViewer({
               const rawNumber = analysis.clause?.clause_number?.trim() || "";
               const title = analysis.clause?.title?.trim() || "Contract Clause";
 
-              // Cleanly format title without repeating clause numbers (e.g. avoid "7. 7. To purchase...")
               let displayHeader = title;
               if (rawNumber) {
                 if (
@@ -209,6 +218,7 @@ export function DocumentViewer({
                 <div
                   key={analysis.id}
                   id={`clause-${analysis.id}`}
+                  data-testid="clause-item"
                   onClick={() => onClauseSelect(analysis.id)}
                   className={overlayStyles}
                   tabIndex={0}

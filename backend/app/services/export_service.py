@@ -22,7 +22,6 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.pdfgen import canvas
 from reportlab.platypus import (
     HRFlowable,
-    KeepTogether,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -107,23 +106,25 @@ class ExportService:
         clause_exports: list[dict[str, Any]] = []
         for ca in clause_analyses:
             clause = clause_map.get(UUID(str(ca.clause_id)))
-            clause_exports.append({
-                "clause_id": str(ca.clause_id),
-                "clause_index": clause.clause_index if clause else None,
-                "clause_number": clause.clause_number if clause else None,
-                "title": clause.title if clause else "Clause",
-                "category": clause.category if clause else "General",
-                "original_text": clause.content if clause else "",
-                "plain_english": ca.plain_english_summary,
-                "risk_level": ca.risk_category,
-                "risk_score": ca.risk_score,
-                "confidence": ca.confidence_score,
-                "risk_reasons": ca.risk_reasons or [],
-                "missing_protections": ca.missing_protections or [],
-                "suggested_rewrite": ca.suggested_rewrite,
-                "legal_review_note": ca.potential_legal_concern,
-                "retrieved_references": ca.retrieved_clauses or [],
-            })
+            clause_exports.append(
+                {
+                    "clause_id": str(ca.clause_id),
+                    "clause_index": clause.clause_index if clause else None,
+                    "clause_number": clause.clause_number if clause else None,
+                    "title": clause.title if clause else "Clause",
+                    "category": clause.category if clause else "General",
+                    "original_text": clause.content if clause else "",
+                    "plain_english": ca.plain_english_summary,
+                    "risk_level": ca.risk_category,
+                    "risk_score": ca.risk_score,
+                    "confidence": ca.confidence_score,
+                    "risk_reasons": ca.risk_reasons or [],
+                    "missing_protections": ca.missing_protections or [],
+                    "suggested_rewrite": ca.suggested_rewrite,
+                    "legal_review_note": ca.potential_legal_concern,
+                    "retrieved_references": ca.retrieved_clauses or [],
+                }
+            )
 
         score = doc_analysis.overall_risk_score if doc_analysis else None
         if score is None:
@@ -150,7 +151,9 @@ class ExportService:
             "risk_summary": {
                 "overall_risk_score": score,
                 "overall_risk_level": risk_level,
-                "executive_summary": doc_analysis.overall_summary if doc_analysis else "No analysis available.",
+                "executive_summary": doc_analysis.overall_summary
+                if doc_analysis
+                else "No analysis available.",
                 "category_breakdown": doc_analysis.risk_distribution if doc_analysis else {},
                 "negotiation_priorities": doc_analysis.top_risky_clauses if doc_analysis else [],
                 "recommendations": doc_analysis.recommendations if doc_analysis else [],
@@ -169,7 +172,11 @@ class ExportService:
         clauses = data["clauses"]
 
         score_val = summary.get("overall_risk_score")
-        score_display = f"**{score_val}/100** ({summary['overall_risk_level']})" if score_val is not None else "**N/A** (Risk Scoring Skipped for Non-Legal Document)"
+        score_display = (
+            f"**{score_val}/100** ({summary['overall_risk_level']})"
+            if score_val is not None
+            else "**N/A** (Risk Scoring Skipped for Non-Legal Document)"
+        )
 
         md_lines = [
             f"# Legal Document Simplification & Risk Report: {doc['filename']}",
@@ -200,29 +207,49 @@ class ExportService:
                     max_lvl = stats.get("max_risk_level", stats.get("max_risk", "-"))
                     md_lines.append(f"| {cat} | {count} | {avg_score} | `{max_lvl}` |")
         else:
-            md_lines.append("| General | " + str(len(clauses)) + " | " + str(summary.get('overall_risk_score') or '-') + " | `LOW` |")
+            md_lines.append(
+                "| General | "
+                + str(len(clauses))
+                + " | "
+                + str(summary.get("overall_risk_score") or "-")
+                + " | `LOW` |"
+            )
 
-        # Negotiation Priorities
-        priorities = summary.get("negotiation_priorities", [])
-        if priorities:
-            md_lines.extend([
-                "",
-                "## 3. Top Negotiation Priorities",
-                "",
-            ])
-            for idx, p in enumerate(priorities, start=1):
-                issue = p.get("issue", "Disproportionate risk")
-                change = p.get("suggested_change", "Seek reciprocal terms")
-                lvl = p.get("risk_level", p.get("priority", "HIGH"))
-                md_lines.append(f"{idx}. **[{lvl}] {issue}**")
-                md_lines.append(f"   - *Recommended Negotiation Adjustment:* {change}")
+        # Negotiation Priorities / Key Recommendations
+        priorities = summary.get("negotiation_priorities") or []
+        recommendations = summary.get("recommendations") or []
+        clause_sec_num = 3
+        if priorities or recommendations:
+            clause_sec_num = 4
+            md_lines.extend(
+                [
+                    "",
+                    "## 3. Top Negotiation Priorities",
+                    "",
+                ]
+            )
+            if priorities:
+                for idx, p in enumerate(priorities, start=1):
+                    if isinstance(p, dict):
+                        issue = p.get("issue", "Disproportionate risk")
+                        change = p.get("suggested_change", "Seek reciprocal terms")
+                        lvl = p.get("risk_level", p.get("priority", "HIGH"))
+                        md_lines.append(f"{idx}. **[{lvl}] {issue}**")
+                        md_lines.append(f"   - *Recommended Negotiation Adjustment:* {change}")
+                    else:
+                        md_lines.append(f"{idx}. {p}")
+            else:
+                for idx, rec in enumerate(recommendations, start=1):
+                    md_lines.append(f"{idx}. {rec}")
 
         # Clause-by-Clause breakdown
-        md_lines.extend([
-            "",
-            "## 4. Clause-by-Clause Risk Analysis",
-            "",
-        ])
+        md_lines.extend(
+            [
+                "",
+                f"## {clause_sec_num}. Clause-by-Clause Risk Analysis",
+                "",
+            ]
+        )
 
         for c in clauses:
             title = c.get("title") or f"Clause {c.get('clause_index', '')}"
@@ -230,11 +257,13 @@ class ExportService:
             score = c.get("risk_score", 0)
             conf = c.get("confidence", 0.0)
 
-            md_lines.extend([
-                f"### {title}",
-                f"- **Risk Level:** `{risk_lvl}` (Score: {score}/100, Confidence: {conf})",
-                f"- **Plain English Meaning:** {c.get('plain_english', '')}",
-            ])
+            md_lines.extend(
+                [
+                    f"### {title}",
+                    f"- **Risk Level:** `{risk_lvl}` (Score: {score}/100, Confidence: {conf})",
+                    f"- **Plain English Meaning:** {c.get('plain_english', '')}",
+                ]
+            )
 
             reasons = c.get("risk_reasons", [])
             if reasons:
@@ -257,11 +286,13 @@ class ExportService:
 
             md_lines.append("")
 
-        md_lines.extend([
-            "---",
-            "> **Disclaimer:** " + LEGAL_DISCLAIMER,
-            "",
-        ])
+        md_lines.extend(
+            [
+                "---",
+                "> **Disclaimer:** " + LEGAL_DISCLAIMER,
+                "",
+            ]
+        )
 
         return "\n".join(md_lines)
 
@@ -362,12 +393,16 @@ class ExportService:
                 sub_title_style,
             )
         )
-        story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0284c7"), spaceAfter=10))
+        story.append(
+            HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0284c7"), spaceAfter=10)
+        )
 
         # Top KPI Summary Box
         score_val = summary.get("overall_risk_score")
         risk_level = summary.get("overall_risk_level", "LOW")
-        score_text = f"<b>{score_val}</b> / 100" if score_val is not None else "<b>N/A</b> (Non-Legal)"
+        score_text = (
+            f"<b>{score_val}</b> / 100" if score_val is not None else "<b>N/A</b> (Non-Legal)"
+        )
 
         risk_colors = {
             "CRITICAL": "#ef4444",
@@ -381,44 +416,61 @@ class ExportService:
         summary_table_data = [
             [
                 Paragraph("<b>Document Classification:</b>", body_style),
-                Paragraph(html.escape(str(doc_info.get("document_type", "General")).replace("_", " ").title()), body_style),
+                Paragraph(
+                    html.escape(
+                        str(doc_info.get("document_type", "General")).replace("_", " ").title()
+                    ),
+                    body_style,
+                ),
                 Paragraph("<b>Overall Risk Assessment:</b>", body_style),
-                Paragraph(f"<font color='{badge_color}'><b>{score_text} &nbsp;[{risk_level}]</b></font>", body_style),
+                Paragraph(
+                    f"<font color='{badge_color}'><b>{score_text} &nbsp;[{risk_level}]</b></font>",
+                    body_style,
+                ),
             ],
             [
                 Paragraph("<b>Total Clauses Evaluated:</b>", body_style),
                 Paragraph(str(len(clauses)), body_style),
                 Paragraph("<b>Audit Status:</b>", body_style),
-                Paragraph(html.escape(str(doc_info.get("status", "completed")).upper()), body_style),
+                Paragraph(
+                    html.escape(str(doc_info.get("status", "completed")).upper()), body_style
+                ),
             ],
         ]
         summary_table = Table(summary_table_data, colWidths=[130, 122, 130, 122])
         summary_table.setStyle(
-            TableStyle([
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
-                ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#cbd5e1")),
-                ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-            ])
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+                    ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#cbd5e1")),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ]
+            )
         )
         story.append(summary_table)
         story.append(Spacer(1, 10))
 
         # Legal Disclaimer Callout
         disclaimer_text = html.escape(disclaimer or LEGAL_DISCLAIMER)
-        disc_table = Table([[Paragraph(f"<b>LEGAL DISCLAIMER:</b> {disclaimer_text}", disclaimer_style)]], colWidths=[504])
+        disc_table = Table(
+            [[Paragraph(f"<b>LEGAL DISCLAIMER:</b> {disclaimer_text}", disclaimer_style)]],
+            colWidths=[504],
+        )
         disc_table.setStyle(
-            TableStyle([
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f1f5f9")),
-                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-            ])
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f1f5f9")),
+                    ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ]
+            )
         )
         story.append(disc_table)
         story.append(Spacer(1, 10))
@@ -432,12 +484,17 @@ class ExportService:
         # Section 2: Category Risk Breakdown
         story.append(Paragraph("2. Category Risk Breakdown", h2_style))
         cat_breakdown = summary.get("category_breakdown", {})
+        th_style = ParagraphStyle(
+            "ReportTableHeader",
+            parent=body_style,
+            textColor=colors.white,
+        )
         cat_rows = [
             [
-                Paragraph("<b>Category</b>", body_style),
-                Paragraph("<b>Clause Count</b>", body_style),
-                Paragraph("<b>Avg Risk Score</b>", body_style),
-                Paragraph("<b>Max Risk Tier</b>", body_style),
+                Paragraph("<b>Category</b>", th_style),
+                Paragraph("<b>Clause Count</b>", th_style),
+                Paragraph("<b>Avg Risk Score</b>", th_style),
+                Paragraph("<b>Max Risk Tier</b>", th_style),
             ]
         ]
 
@@ -447,64 +504,96 @@ class ExportService:
                     c_count = str(stats.get("clause_count", 1))
                     c_avg = str(stats.get("avg_score", "-"))
                     c_max = str(stats.get("max_risk_level", stats.get("max_risk", "-")))
-                    cat_rows.append([
-                        Paragraph(html.escape(str(cat).replace("_", " ").title()), body_style),
-                        Paragraph(c_count, body_style),
-                        Paragraph(c_avg, body_style),
-                        Paragraph(f"<b>{html.escape(c_max)}</b>", body_style),
-                    ])
+                    cat_rows.append(
+                        [
+                            Paragraph(html.escape(str(cat).replace("_", " ").title()), body_style),
+                            Paragraph(c_count, body_style),
+                            Paragraph(c_avg, body_style),
+                            Paragraph(f"<b>{html.escape(c_max)}</b>", body_style),
+                        ]
+                    )
         if len(cat_rows) == 1:
-            cat_rows.append([
-                Paragraph("General Agreement", body_style),
-                Paragraph(str(len(clauses)), body_style),
-                Paragraph(str(score_val or "-"), body_style),
-                Paragraph(f"<b>{risk_level}</b>", body_style),
-            ])
+            cat_rows.append(
+                [
+                    Paragraph("General Agreement", body_style),
+                    Paragraph(str(len(clauses)), body_style),
+                    Paragraph(str(score_val or "-"), body_style),
+                    Paragraph(f"<b>{risk_level}</b>", body_style),
+                ]
+            )
 
         cat_table = Table(cat_rows, colWidths=[180, 108, 108, 108])
         cat_table.setStyle(
-            TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f172a")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
-                ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-            ])
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f172a")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [colors.white, colors.HexColor("#f8fafc")],
+                    ),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ]
+            )
         )
         story.append(cat_table)
         story.append(Spacer(1, 10))
 
-        # Section 3: Negotiation Priorities (if any)
-        priorities = summary.get("negotiation_priorities", [])
-        if priorities and isinstance(priorities, list):
+        # Section 3: Negotiation Priorities / Key Recommendations
+        priorities = summary.get("negotiation_priorities") or []
+        recommendations = summary.get("recommendations") or []
+        has_priorities = isinstance(priorities, list) and len(priorities) > 0
+        has_recs = isinstance(recommendations, list) and len(recommendations) > 0
+        clause_sec_num = 3
+        if has_priorities or has_recs:
+            clause_sec_num = 4
             story.append(Paragraph("3. Top Negotiation Priorities", h2_style))
-            for idx, p in enumerate(priorities, start=1):
-                if isinstance(p, dict):
-                    issue = html.escape(str(p.get("issue", "Disproportionate risk")))
-                    change = html.escape(str(p.get("suggested_change", "Seek reciprocal terms")))
-                    lvl = html.escape(str(p.get("risk_level", p.get("priority", "HIGH"))).upper())
-                    p_color = risk_colors.get(lvl, "#f97316")
-                    story.append(
-                        Paragraph(
-                            f"<b>{idx}.</b> <font color='{p_color}'><b>[{lvl}]</b></font> <b>{issue}</b><br/>"
-                            f"&nbsp;&nbsp;&nbsp;&nbsp;<i>Recommended Adjustment:</i> {change}",
-                            body_style,
+            if has_priorities:
+                for idx, p in enumerate(priorities, start=1):
+                    if isinstance(p, dict):
+                        issue = html.escape(str(p.get("issue", "Disproportionate risk")))
+                        change = html.escape(
+                            str(p.get("suggested_change", "Seek reciprocal terms"))
                         )
-                    )
+                        lvl = html.escape(
+                            str(p.get("risk_level", p.get("priority", "HIGH"))).upper()
+                        )
+                        p_color = risk_colors.get(lvl, "#f97316")
+                        story.append(
+                            Paragraph(
+                                f"<b>{idx}.</b> <font color='{p_color}'><b>[{lvl}]</b></font> <b>{issue}</b><br/>"
+                                f"&nbsp;&nbsp;&nbsp;&nbsp;<i>Recommended Adjustment:</i> {change}",
+                                body_style,
+                            )
+                        )
+                    else:
+                        story.append(Paragraph(f"<b>{idx}.</b> {html.escape(str(p))}", body_style))
+                    story.append(Spacer(1, 3))
+            else:
+                for idx, rec in enumerate(recommendations, start=1):
+                    story.append(Paragraph(f"<b>{idx}.</b> {html.escape(str(rec))}", body_style))
                     story.append(Spacer(1, 3))
             story.append(Spacer(1, 8))
 
-        # Section 4: Clause-by-Clause Risk Analysis
-        story.append(Paragraph("4. Clause-by-Clause Risk Analysis", h2_style))
+        # Section 4 (or 3 if no priorities): Clause-by-Clause Risk Analysis
+        story.append(Paragraph(f"{clause_sec_num}. Clause-by-Clause Risk Analysis", h2_style))
         story.append(
             Paragraph(
                 "Every evaluated agreement provision with plain-English meaning, identified liabilities, grounded citations, and recommended balanced rewrites.",
                 sub_title_style,
             )
+        )
+        clause_h3_style = ParagraphStyle(
+            "ReportClauseH3",
+            parent=h3_style,
+            keepWithNext=True,
         )
 
         for idx, c in enumerate(clauses, start=1):
@@ -519,45 +608,64 @@ class ExportService:
                 Paragraph(
                     f"<b>{html.escape(c_title)}</b> &nbsp;&nbsp;"
                     f"<font color='{c_color}'><b>[{c_risk} &bull; Score: {c_score}/100 &bull; Conf: {c_conf:.2f}]</b></font>",
-                    h3_style,
+                    clause_h3_style,
                 )
             )
 
             plain = c.get("plain_english")
             if plain:
-                clause_items.append(Paragraph(f"<b>Plain English:</b> {html.escape(plain)}", body_style))
+                clause_items.append(
+                    Paragraph(f"<b>Plain English:</b> {html.escape(plain)}", body_style)
+                )
 
             reasons = c.get("risk_reasons") or []
             if reasons:
                 reasons_html = "<br/>".join([f"&bull; {html.escape(str(r))}" for r in reasons])
-                clause_items.append(Paragraph(f"<b>Key Concerns &amp; Liabilities:</b><br/>{reasons_html}", body_style))
+                clause_items.append(
+                    Paragraph(
+                        f"<b>Key Concerns &amp; Liabilities:</b><br/>{reasons_html}", body_style
+                    )
+                )
 
             missing = c.get("missing_protections") or []
             if missing:
                 missing_str = ", ".join([html.escape(str(m)) for m in missing])
-                clause_items.append(Paragraph(f"<b>Missing Protections:</b> {missing_str}", body_style))
+                clause_items.append(
+                    Paragraph(f"<b>Missing Protections:</b> {missing_str}", body_style)
+                )
 
             rewrite = c.get("suggested_rewrite")
             if rewrite:
                 rewrite_table = Table(
-                    [[Paragraph(f"<b>Suggested Balanced Rewrite:</b><br/>{html.escape(rewrite)}", rewrite_style)]],
+                    [
+                        [
+                            Paragraph(
+                                f"<b>Suggested Balanced Rewrite:</b><br/>{html.escape(rewrite)}",
+                                rewrite_style,
+                            )
+                        ]
+                    ],
                     colWidths=[504],
                 )
                 rewrite_table.setStyle(
-                    TableStyle([
-                        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f0fdf4")),
-                        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#86efac")),
-                        ("TOPPADDING", (0, 0), (-1, -1), 4),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                    ])
+                    TableStyle(
+                        [
+                            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f0fdf4")),
+                            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#86efac")),
+                            ("TOPPADDING", (0, 0), (-1, -1), 4),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                        ]
+                    )
                 )
                 clause_items.append(rewrite_table)
 
             note = c.get("legal_review_note")
             if note:
-                clause_items.append(Paragraph(f"<i>Legal Review Note: {html.escape(note)}</i>", disclaimer_style))
+                clause_items.append(
+                    Paragraph(f"<i>Legal Review Note: {html.escape(note)}</i>", disclaimer_style)
+                )
 
             clause_items.append(
                 HRFlowable(
@@ -568,7 +676,7 @@ class ExportService:
                     spaceAfter=6,
                 )
             )
-            story.append(KeepTogether(clause_items))
+            story.extend(clause_items)
 
         doc.build(story, canvasmaker=NumberedCanvas)
         return buf.getvalue()

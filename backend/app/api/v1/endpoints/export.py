@@ -95,5 +95,7 @@ async def export_csv(
     """CSV export endpoint (v1.1 Backlog)."""
     return JSONResponse(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        content={"detail": "CSV export is scheduled for v1.1 backlog. Please use Markdown or JSON export in v1."},
+        content={
+            "detail": "CSV export is scheduled for v1.1 backlog. Please use Markdown or JSON export in v1."
+        },
     )

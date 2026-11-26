@@ -181,14 +181,17 @@ class FakeLLMClient(LLMClient):
         if response_model.__name__ == "LLMBatchClauseAnalysis":
             count = prompt.count("<<<UNTRUSTED_DOCUMENT_CLAUSE>>>") or 1
             from app.ai.response_parser import LLMClauseAnalysis
+
             sample_items = [
-                LLMClauseAnalysis.model_validate({
-                    "plain_english": "Plain summary of clause provisions.",
-                    "risk_level": "LOW",
-                    "risk_score": 15,
-                    "confidence": 0.95,
-                    "risk_reasons": ["Grounded in baseline contract terms."],
-                })
+                LLMClauseAnalysis.model_validate(
+                    {
+                        "plain_english": "Plain summary of clause provisions.",
+                        "risk_level": "LOW",
+                        "risk_score": 15,
+                        "confidence": 0.95,
+                        "risk_reasons": ["Grounded in baseline contract terms."],
+                    }
+                )
                 for _ in range(count)
             ]
             return cast(T, response_model(items=sample_items))

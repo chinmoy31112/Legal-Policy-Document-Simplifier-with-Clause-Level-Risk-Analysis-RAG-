@@ -4,6 +4,7 @@ Authentication service.
 Business logic for user registration, login, token refresh, and profile retrieval.
 """
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -123,32 +124,113 @@ class AuthService:
             raise AuthenticationError("User not found.")
         return user
 
-    async def delete_account(self, user_id: UUID) -> None:
+    async def delete_account(
+        self,
+        user_id: UUID,
+        legacy_tasks_map: dict[UUID, Any] | None = None,
+    ) -> dict[str, Any]:
         """
-        Delete a user account and all associated data (GDPR delete-my-data).
-        Cleans up local upload files and cascades deletions in DB.
+        Cancel all user jobs first (DB + Redis + ARQ, waiting up to 5s), delete user account
+        and all associated data (documents, clauses, results, jobs, local files, cached AI results),
+        and report what is purged vs kept.
         """
+        from sqlalchemy import delete, select
+
+        from app.core.cancellation import purge_ai_caches
+        from app.models.analysis import AnalysisResult, DocumentAnalysis
+        from app.models.clause import Clause
+        from app.models.document import Document
+        from app.models.job import Job
+        from app.services.job_service import JobService
+
         user = await self.user_repo.get_by_id(user_id)
         if user is None:
             raise AuthenticationError("User not found.")
 
-        # Clean up user's upload directory
+        # 1. Cancel all queued/running jobs belonging to this user FIRST
+        job_service = JobService(self.session)
+        cancel_summary = await job_service.cancel_user_jobs(
+            user_id=user_id,
+            timeout_seconds=5.0,
+            legacy_tasks_map=legacy_tasks_map,
+        )
+
+        # Capture document IDs and clause texts for AI cache invalidation prior to deletion
+        doc_rows = await self.session.execute(
+            select(Document.id).where(Document.user_id == user_id)
+        )
+        doc_ids = [row[0] for row in doc_rows.fetchall()]
+        doc_id_strs = [str(did) for did in doc_ids]
+
+        clause_texts: list[str] = []
+        if doc_ids:
+            cls_rows = await self.session.execute(
+                select(Clause.content).where(Clause.document_id.in_(doc_ids))
+            )
+            clause_texts = [row[0] for row in cls_rows.fetchall() if row[0]]
+
+        # 2. Clean up user's upload directory
         import shutil
 
         from app.core.config import get_settings
 
         cfg = get_settings()
         user_dir = cfg.upload_path / str(user_id)
-        if user_dir.exists():
+        files_removed = user_dir.exists()
+        if files_removed:
             shutil.rmtree(user_dir, ignore_errors=True)
 
-        # Explicitly delete user documents first to purge all cascade records
-        from sqlalchemy import delete
+        # 3. Explicitly purge results, clauses, jobs, documents, then user record
+        results_count = 0
+        doc_analysis_count = 0
+        clauses_count = 0
+        if doc_ids:
+            r1 = await self.session.execute(
+                delete(AnalysisResult).where(AnalysisResult.document_id.in_(doc_ids))
+            )
+            r2 = await self.session.execute(
+                delete(DocumentAnalysis).where(DocumentAnalysis.document_id.in_(doc_ids))
+            )
+            r3 = await self.session.execute(delete(Clause).where(Clause.document_id.in_(doc_ids)))
+            results_count = int(r1.rowcount or 0)
+            doc_analysis_count = int(r2.rowcount or 0)
+            clauses_count = int(r3.rowcount or 0)
 
-        from app.models.document import Document
-        await self.session.execute(delete(Document).where(Document.user_id == user_id))
+        job_del = await self.session.execute(delete(Job).where(Job.user_id == user_id))
+        doc_del = await self.session.execute(delete(Document).where(Document.user_id == user_id))
 
-        # Delete user record
         await self.user_repo.delete(user_id)
         await self.session.commit()
-        logger.info("user_account_deleted", user_id=str(user_id))
+
+        # 4. Purge cached AI results tied to this user or their documents
+        cache_purged = await purge_ai_caches(
+            document_ids=doc_id_strs,
+            user_id=str(user_id),
+            clause_texts=clause_texts,
+        )
+
+        report: dict[str, Any] = {
+            "purged": {
+                "user_id": str(user_id),
+                "documents": int(doc_del.rowcount or 0),
+                "clauses": clauses_count,
+                "analysis_results": results_count,
+                "document_analyses": doc_analysis_count,
+                "jobs": int(job_del.rowcount or 0),
+                "upload_directory_removed": files_removed,
+                **cache_purged,
+                "cancellation": cancel_summary,
+            },
+            "kept": {
+                "audit_logs": "Anonymized (user_id set to NULL) and retained for compliance audit.",
+                "call_ledger": "Aggregate API quota telemetry retained without user PII or document text.",
+                "reference_clauses": "Global benchmark reference corpus unchanged.",
+            },
+        }
+        logger.info(
+            "user_account_deleted",
+            user_id=str(user_id),
+            purged=report["purged"],
+            kept=report["kept"],
+        )
+        return report

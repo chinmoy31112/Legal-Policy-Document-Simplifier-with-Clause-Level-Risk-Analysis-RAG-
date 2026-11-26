@@ -8,7 +8,7 @@ on:
 
 jobs:
   backend-ci:
-    name: Backend Lint, TypeCheck, Tests & Phase Eval
+    name: Backend Lint, TypeCheck, Migrations, Tests & Eval
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -20,7 +20,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres -d legal_simplifier"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
@@ -39,41 +39,52 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
-          pip install ruff mypy arq
+          pip install ruff mypy arq redis pre-commit
 
-      - name: Run Ruff Linter
-        run: |
-          ruff check backend
+      - name: Run Ruff Check
+        run: ruff check backend
+
+      - name: Run Ruff Format Check
+        run: ruff format --check backend
 
       - name: Run Mypy Type Checker
-        run: |
-          mypy backend/app --ignore-missing-imports
+        run: mypy --config-file backend/pyproject.toml backend/app
 
-      - name: Run Database Migrations
-        env:
-          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/legal_simplifier
-          APP_ENV: test
-        run: |
-          cd backend
-          alembic upgrade head
-
-      - name: Run Backend Tests
+      - name: Run Database Migrations on Empty DB
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/legal_simplifier
           REDIS_URL: redis://localhost:6379/0
           APP_ENV: test
+          GOOGLE_API_KEY: ""
         run: |
-          pytest backend/tests -v
+          cd backend
+          alembic upgrade head
+
+      - name: Run Backend Tests (Fake LLM)
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/legal_simplifier
+          REDIS_URL: redis://localhost:6379/0
+          APP_ENV: test
+          GOOGLE_API_KEY: ""
+        run: pytest backend/tests -v
+
+      - name: Run Evaluation Harness
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/legal_simplifier
+          REDIS_URL: redis://localhost:6379/0
+          APP_ENV: test
+          GOOGLE_API_KEY: ""
+        run: python -m backend.eval.runner --phase 7 --output /tmp/phase-7-report.md
 
   frontend-ci:
     name: Frontend Lint & TypeCheck

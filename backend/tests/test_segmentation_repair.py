@@ -47,18 +47,19 @@ def test_gpa_pdf_segmentation_clause_count_and_cross_page():
     assert 40 <= clause_count <= 46, f"Expected 40-46 clauses, got {clause_count}"
 
     # Check cross-page clauses have bounding boxes on multiple pages
-    cross_page_clauses = [
-        c for c in clauses
-        if len({box[0] for box in c.bounding_boxes}) > 1
-    ]
+    cross_page_clauses = [c for c in clauses if len({box[0] for box in c.bounding_boxes}) > 1]
     print(f"[GPA Segmentation] Cross-page clauses count: {len(cross_page_clauses)}")
-    assert len(cross_page_clauses) >= 3, "Expected at least 3 cross-page clauses spanning multiple pages"
+    assert len(cross_page_clauses) >= 3, (
+        "Expected at least 3 cross-page clauses spanning multiple pages"
+    )
 
     # Clause 13 starts on page 2 and continues on page 3
     clause_13 = next((c for c in clauses if "13." in c.title or "13." in c.text[:20]), None)
     assert clause_13 is not None, "Clause 13 not found"
     pages_c13 = {box[0] for box in clause_13.bounding_boxes}
-    assert 2.0 in pages_c13 and 3.0 in pages_c13, f"Clause 13 must highlight on both page 2 and page 3, got pages: {pages_c13}"
+    assert 2.0 in pages_c13 and 3.0 in pages_c13, (
+        f"Clause 13 must highlight on both page 2 and page 3, got pages: {pages_c13}"
+    )
 
 
 def test_grounding_quote_validator_normalization():
@@ -66,14 +67,14 @@ def test_grounding_quote_validator_normalization():
     validator = GroundingValidator(min_precision=0.90)
 
     # 1. Line-break hyphenation ("ac- counts" in text, "accounts" in quote or vice versa)
-    clause_text = (
-        "17. To continue and or to open new, current and or overdraft ac- counts in my name with any Banks."
-    )
+    clause_text = "17. To continue and or to open new, current and or overdraft ac- counts in my name with any Banks."
     # Reason cites standard 'accounts' enclosed in curly quotes “accounts”
     reason_with_curly_and_dehyphenated = (
-        'The attorney has authority to open “accounts” without requiring joint signature.'
+        "The attorney has authority to open “accounts” without requiring joint signature."
     )
-    is_grounded, citation = validator.is_reason_grounded(reason_with_curly_and_dehyphenated, clause_text)
+    is_grounded, citation = validator.is_reason_grounded(
+        reason_with_curly_and_dehyphenated, clause_text
+    )
     assert is_grounded, f"Failed to ground with curly quotes and line-break hyphenation: {citation}"
 
     # 2. Straight vs curly quotes in reason
@@ -82,13 +83,15 @@ def test_grounding_quote_validator_normalization():
     assert is_grounded_2, "Failed to ground straight quotes"
 
     # 3. Whitespace normalization (tabs, newlines, multiple spaces)
-    clause_multiline = "3. To contract with any person    for leasing\n\nfor such period   at such rent."
-    reason_spaced = 'Grants power to lease “for such period at such rent” without restriction.'
+    clause_multiline = (
+        "3. To contract with any person    for leasing\n\nfor such period   at such rent."
+    )
+    reason_spaced = "Grants power to lease “for such period at such rent” without restriction."
     is_grounded_3, _ = validator.is_reason_grounded(reason_spaced, clause_multiline)
     assert is_grounded_3, "Failed to ground multiline/irregular whitespace quote"
 
     # 4. Strict rejection when evidence really does NOT appear in clause
-    fake_reason = 'The clause imposes an “unlimited financial liability” on the customer.'
+    fake_reason = "The clause imposes an “unlimited financial liability” on the customer."
     is_grounded_fake, err = validator.is_reason_grounded(fake_reason, clause_text)
     assert not is_grounded_fake, "Validator should have rejected hallucinated quote"
     assert "ungrounded" in err

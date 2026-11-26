@@ -335,7 +335,9 @@ async def test_per_user_data_isolation(client: AsyncClient):
     assert res_ana.status_code == 404
 
     # User A can export PDF
-    res_exp_pdf_a = await client.get(f"/api/v1/documents/{doc_id}/export/pdf", headers={"Authorization": f"Bearer {token_a}"})
+    res_exp_pdf_a = await client.get(
+        f"/api/v1/documents/{doc_id}/export/pdf", headers={"Authorization": f"Bearer {token_a}"}
+    )
     assert res_exp_pdf_a.status_code == 200
     assert "application/pdf" in res_exp_pdf_a.headers.get("content-type", "")
     assert res_exp_pdf_a.content.startswith(b"%PDF")

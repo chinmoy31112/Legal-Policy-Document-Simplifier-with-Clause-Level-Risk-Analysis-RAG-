@@ -15,13 +15,19 @@ export type DocumentType =
 
 export type DocumentStatus =
   | "uploaded"
+  | "queued"
+  | "running"
   | "extracting"
   | "segmenting"
   | "embedding"
   | "analyzing"
   | "completed"
   | "failed"
-  | "waiting for quota";
+  | "waiting for quota"
+  | "waiting_for_quota"
+  | "cancelling"
+  | "cancelled"
+  | "interrupted";
 
 export interface Document {
   id: string;
@@ -81,7 +87,9 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
 };
 
 export const STATUS_LABELS: Record<DocumentStatus, string> = {
-  uploaded: "Uploaded",
+  uploaded: "Queued",
+  queued: "Queued",
+  running: "Running",
   extracting: "Extracting Text",
   segmenting: "Segmenting Clauses",
   embedding: "Generating Embeddings",
@@ -89,4 +97,8 @@ export const STATUS_LABELS: Record<DocumentStatus, string> = {
   completed: "Completed",
   failed: "Failed",
   "waiting for quota": "Waiting for Quota",
+  waiting_for_quota: "Waiting for Quota",
+  cancelling: "Stopping analysis...",
+  cancelled: "Cancelled",
+  interrupted: "Interrupted",
 };

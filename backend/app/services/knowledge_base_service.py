@@ -270,7 +270,10 @@ class KnowledgeBaseService:
                     metadata_={
                         "page": seg.page,
                         "text_hash": self._hash_text(seg.text),
-                        "bounding_boxes": [b.model_dump() if hasattr(b, "model_dump") else b for b in seg.bounding_boxes],
+                        "bounding_boxes": [
+                            b.model_dump() if hasattr(b, "model_dump") else b
+                            for b in seg.bounding_boxes
+                        ],
                     },
                 )
                 for seg in segments

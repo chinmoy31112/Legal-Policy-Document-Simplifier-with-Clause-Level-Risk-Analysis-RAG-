@@ -58,3 +58,20 @@ class KBClause(Base, UUIDMixin, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<KBClause(id={self.id}, title={self.title})>"
+
+
+class ReferenceClause(Base, TimestampMixin):
+    """Benchmark reference clause used for RAG similarity retrieval."""
+
+    __tablename__ = "reference_clauses"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    document_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    why_standard_or_risky: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True, default=dict)
+
+    def __repr__(self) -> str:
+        return f"<ReferenceClause(id={self.id}, category={self.category})>"

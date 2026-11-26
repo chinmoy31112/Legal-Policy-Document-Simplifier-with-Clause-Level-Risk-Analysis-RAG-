@@ -30,11 +30,16 @@ class DocumentStatus(StrEnum):
     """Document processing status."""
 
     UPLOADED = "uploaded"
+    QUEUED = "queued"
+    RUNNING = "running"
     EXTRACTING = "extracting"
     SEGMENTING = "segmenting"
     EMBEDDING = "embedding"
     ANALYZING = "analyzing"
     WAITING_FOR_QUOTA = "waiting for quota"
+    CANCELLING = "cancelling"
+    CANCELLED = "cancelled"
+    INTERRUPTED = "interrupted"
     COMPLETED = "completed"
     FAILED = "failed"
 
